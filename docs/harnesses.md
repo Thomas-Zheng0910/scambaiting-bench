@@ -1,8 +1,8 @@
-# Harnesses: the counterpart harness and the investigator harness
+# Harnesses: the investigator and the counterpart
 
-Two harnesses, deliberately built as separate services with no shared code path. One drives everything trying to deceive, mislead or legitimately answer. The other runs the system under test. Splitting them is not tidiness; it is what lets the same investigator run against every condition, and what prevents a model failure in one from being attributed to the other.
+Two harnesses with no shared code path. One drives everything trying to deceive, mislead or legitimately answer; the other runs the system under test. Splitting them is not tidiness: it is what lets the same investigator run against every condition, and what keeps a model failure in one from being attributed to the other. They share only the world server, which neither one owns.
 
-Companion to `IMPLEMENTATION_PLAN.md` §4.7–4.8 and §6.
+Companion to `IMPLEMENTATION_PLAN.md` §4.7–4.8 and §6. Both act on the world server described there. Part 1 is the counterpart, which lives inside the world process; Part 2 is the investigator, which lives in `harness/`.
 
 ---
 
@@ -46,23 +46,21 @@ world/actors/
 
 Every component is a pure function of `(world state, incoming message)` except `respond.py`, which calls a model. That boundary is where testability lives: the whole pipeline can be unit-tested with a stub responder.
 
+`respond.py` is the file that calls the model; `prompts.py` only assembles text. Everything left of `respond.py` is deterministic.
+
 ## 1.3 The turn: speak + typed tool calls
 
 The counterpart uses **real OpenAI-style function calling with generated JSON schemas**, the same mechanism the investigator's harness uses for its bookkeeping tools. There are no inline markers, no regex dispatch, and no hand-rolled argument parsing. One implementation (`tools_schema.build_tools(methods)`) serves both harnesses.
 
 ### 1.3.1 The tool set
 
-Each tool is a plain Python method on the actor, decorated to be exposed. Schemas are built from type hints and docstrings exactly as in `llm_agent.build_openai_tools`.
+Each tool is a plain Python method on the actor, decorated to be exposed. Schemas are built from type hints and docstrings by one shared `build_tools()`.
 
 ```python
 class ScammerActor(Counterpart):
-    @counterpart_tool("Send a file we prepared for this client")
-    def send_artifact(self, artifact_id: str) -> ToolResult: ...
-    #   artifact_id: enum, restricted to ids declared for the current stage
-
-    @counterpart_tool("Send a web page to the client")
-    def send_link(self, url_id: str) -> ToolResult: ...
-    #   url_id: enum, restricted to the case's declared links
+    @counterpart_tool("Send a document or a photo")
+    def send_attachment(self, attachment_id: str, note: str) -> ToolResult: ...
+    #   attachment_id: enum, restricted to attachments declared for this stage
 
     @counterpart_tool("Invite the client into a private group")
     def invite_to_room(self, room_id: str) -> ToolResult: ...
@@ -86,20 +84,20 @@ class ScammerActor(Counterpart):
 | Stage | Registered tools |
 |---|---|
 | `intro` | `go_silent` |
-| `invite_group` | `invite_to_room`, `send_link`, `go_silent` |
-| `platform` | `send_link`, `send_artifact`, `go_silent` |
-| `fee` | `send_artifact`, `request`, `edit_last_message`, `go_silent` |
+| `invite_group` | `invite_to_room`, `send_attachment`, `go_silent` |
+| `platform` | `send_attachment`, `go_silent` |
+| `fee` | `send_attachment`, `request`, `edit_last_message`, `go_silent` |
 | `deflect` | `edit_last_message`, `leave_room` |
 | `ghost` | *(none — the actor is finished)* |
 
-This is what replaces the stage machine's action authority without taking choice away from the model. The model decides *whether* to attach the fee schedule now or wait for the next message; it cannot decide to attach something the stage does not offer. Argument enums are generated per stage too, so `send_artifact` in `fee` lists `fee_schedule_pdf` and `payee_details_txt` and nothing else.
+This is what replaces the stage machine's action authority without taking choice away from the model. The model decides *whether* to attach the fee schedule now or wait for the next message; it cannot decide to attach something the stage does not offer. Argument enums are generated per stage too, so `send_attachment` in `fee` lists `fee_schedule_pdf` and `payee_details_txt` and nothing else.
 
 Why stage-scoped rather than globally available with a guard: a tool the model could call but must not is a guard failure waiting to happen, and every such failure is an environment issue that muddies attribution. Not offering it is cleaner than rejecting it.
 
 ### 1.3.3 The round
 
 ```
-investigator message(s)  ──►  router (DM / group / record service, 3 s debounce)
+investigator message_send  ──►  handle.route (DM / group / record service)
                               │
                               ├─ intent.classify(texts) → {label, confidence}      [cheap model, temp 0]
                               ├─ policy.step(stage, intent, counters) → {stage', known_info, strategy, triggers}
@@ -133,13 +131,13 @@ The inner loop is the same shape as the investigator's per-session round: tools 
 | Error recovery | the model has to be told the shape failed | the model sees the error and can retry, like any tool-using system |
 | Enumeration | prose in the prompt | JSON-schema `enum`, enforced by the provider |
 | Reuse | a bespoke second format | same builder as the investigator's tools |
-| Natural tool semantics | actions feel bolted on | "send the document, then tell them it's the schedule" is one turn |
+| Natural tool semantics | actions feel bolted on | "attach the terms sheet, then explain the fee" is one turn |
 
 Tools carry **actions on the world** — send this file, invite to this room, ask for this amount from this payee. They do not carry utterances. Saying what the case authored is not an action: it is what the prompt tells the actor it knows (§1.4.1), and the actor words it freely. An earlier version exposed `reveal_fact(fact_id)`, which made every disclosure a rigid, pre-worded transaction; it was removed because the actor then sounded templated and could not answer a question nobody had anticipated.
 
 ### 1.3.5 The guard, revised
 
-Now that reveals arrive as tool calls, the checks split by what was claimed:
+The checks split by what was claimed:
 
 | Check | Input | On fail |
 |---|---|---|
@@ -245,13 +243,13 @@ These run in CI, cost almost nothing, and are the main defence against actor dri
 ## 2.1 What it is responsible for
 
 - Running the system under test across six sessions with fixed budgets.
-- Exposing exactly one action space: the 16 tools over the world (§2.5).
+- Exposing exactly one action space: the 14 tools over the world (§2.5).
 - Assembling context at round boundaries, including compaction and the notes index.
 - Recording every call and result so the run can be replayed and scored.
 
 It does **not** decide anything about the world, and it never inspects truth. It is a driver plus a recorder.
 
-**No desktop.** The pilot has no browser, no Xvfb, no screenshot loop, no coordinates. CUA is a deferred adapter (§2.9), not a build dependency.
+**No rendered interface.** There is no browser, no display server, no screenshot loop, no coordinates and no website anywhere in the system. The world is a database read through tools.
 
 ## 2.2 Components
 
@@ -260,15 +258,14 @@ harness/
 ├── run.py          # CLI, config, run.lock.json
 ├── session.py      # 6-session lifecycle and budget enforcement
 ├── context.py      # assembly, per-type truncation, compaction
-├── tools.py        # the 16 tools, as typed methods
+├── tools.py        # the 14 tools, as typed methods
 ├── dispatch.py     # call → world server (HTTP) or local harness
 ├── notes.py        # structured notes store, versioned by session
 ├── agents/
 │   ├── chat_tools.py  # primary adapter: any tool-calling chat model
-│   ├── scripted.py    # G1 solver, identical tool surface
-│   └── cua.py         # deferred; interface stub
+│   └── scripted.py    # G1 solver, identical tool surface
 ├── trace.py        # append-only log → replay.jsonl.zst
-└── prompts/ (mission.md, cover_identity.yaml)
+└── prompts/ (mission.md, cover_identity.json)
 ```
 
 `agents/` is the only place a model is called. Everything else is model-agnostic, which is what makes "same harness, different model" a real claim.
@@ -308,7 +305,7 @@ Four invariants:
 | Compacted summary of everything earlier | Raw history |
 | Budgets remaining | Wall clock |
 
-**Truncation is per type and deterministic:** `page_visit` text ≤4k chars with a trailing marker; `feed_list` complete (41 snippets); `messages_read` honours `last_n`; `profile_view` ≤10 recent posts. Stated in the tool descriptions so the model knows to re-read rather than assume.
+**Truncation is per type and deterministic:** `feed_read` text ≤4k chars with a trailing marker; `feed_list` complete (43 snippets); `messages_read` honours `last_n`; `profile_view` ≤10 recent posts; `attachment_read` full extracted text up to 8k. Stated in the tool descriptions so the model knows to re-read rather than assume.
 
 **Compaction** every 20 rounds: a cheap model call summarises evicted observations into ≤600 tokens. Logged, not charged as a round — otherwise context management silently eats a quarter of the session. Target ≤40k tokens per round.
 
@@ -316,7 +313,7 @@ Four invariants:
 
 ## 2.5 Tools
 
-Eleven world tools and five harness tools; the full signatures are in `IMPLEMENTATION_PLAN.md` §6.3. Three properties matter here:
+Nine world tools and five harness tools; the full signatures are in `IMPLEMENTATION_PLAN.md` §6.3. Three properties matter here:
 
 - **`flag_item` is free.** D4 counts actors contacted, not flags, so triage costs a call but never a selection penalty.
 - **`notes` is one tool with an `op` enum**, not four tools plus a checkpoint. The assessment is a field on `upsert`, and versioning by session gives the revision history that a checkpoint tool would have duplicated.
@@ -332,7 +329,7 @@ The tools are plain Python methods with type hints and docstrings, converted by 
 | Rounds per session | 20 | `session.py` |
 | World calls per session | 80 | `session.py` |
 | Harness calls per session | 40 | `session.py` |
-| Wall clock per session | 45 min (logged when hit) | `run.py` |
+| Timeout per session | 45 min wall-clock (logged when hit) | `run.py` |
 | Tokens per run | configurable cap | adapter |
 
 Hitting any budget ends the session, not the run, and the reason is recorded in `result.json`.
@@ -358,9 +355,8 @@ Determinism is structural. A tool call is a pure function of `(world state, argu
 
 | Adapter | Interface | Use |
 |---|---|---|
-| `chat_tools` | `step(ctx, tools) -> Step(actions=[], calls=[], text)` over any OpenAI-format endpoint | primary |
+| `chat_tools` | `step(ctx, tools) -> Step(calls=[], text)` over any OpenAI-format endpoint | primary |
 | `scripted` | same signature, deterministic policy | G1 solver |
-| `cua` | would translate the same world into a rendered surface | deferred |
 
 `run.lock.json` records two adapter capabilities that affect comparability: whether the model batches calls, and whether the provider enforces `enum` in argument schemas. A model that cannot batch is not disadvantaged on correctness but uses its 20 rounds differently, and that has to be visible.
 
@@ -368,7 +364,7 @@ Determinism is structural. A tool call is a pure function of `(world state, argu
 
 | Component | Test |
 |---|---|
-| World server | endpoint tests per case fixture; `form_submit` transitions; allowlist rejection |
+| World server | endpoint tests per case fixture; delivery scheduling; unknown-handle rejection |
 | Context builder | golden strings per (session, round) |
 | Truncation | boundary cases at 4k, `last_n`, 10-post cap |
 | `submit_case_table` | 12 cases including a fabricated quote, wrong room, re-submission |
@@ -395,13 +391,13 @@ Determinism is structural. A tool call is a pure function of `(world state, argu
 |---|---|---|
 | Investigator sends a message | `message_send` → world server → counterpart engine | direct function call |
 | Counterpart replies | engine writes a message row with `deliver_at_session` | writing to harness state |
-| Investigator reads a page | `page_visit` over the URL allowlist | fetching anything live |
-| Counterpart changes the world | world-server write, attributed to an actor | page mutation by the investigator |
+| Investigator reads a post | `feed_read` | any network access |
+| Counterpart changes the world | world-server write, attributed to an actor | direct writes by the investigator harness |
 | Scoring | reads `result.json` and `replay.jsonl.zst` | asks either harness at run time |
 
 The one shared dependency is the **world database**, and it is append-only from both sides with a `cause` column, so every state can be attributed to an actor, an event, or the investigator.
 
-The URL allowlist is the boundary that replaces the network sandbox: `page_visit` resolves only against URLs declared by loaded cases, so no case content can cause an outbound fetch.
+The boundary that replaces the network sandbox is the absence of any fetching tool: nothing in the tool set takes a URL, so no case content can cause an outbound request.
 
 ## Part 4 — Combined effort and sequencing
 

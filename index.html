@@ -1036,7 +1036,7 @@
             <div class="stack-label">Investigator harness</div>
             <div>
               <div class="stack-title">Session loop · context · notes · flags · submission</div>
-              <div class="stack-sub">calls the 16 typed tools; no direct database access</div>
+              <div class="stack-sub">calls the 14 typed tools; no direct database access</div>
             </div>
           </div>
           <div class="stack-arrow"><span>tool calls ↔ results</span></div>
@@ -1044,8 +1044,8 @@
           <div class="stack-box internet">
             <div class="stack-label">World server</div>
             <div>
-              <div class="stack-title">FastAPI: feed · profiles · pages · rooms · messages · forms</div>
-              <div class="stack-sub">tenant pages, northbank, filescan; structured text; visual design not measured</div>
+              <div class="stack-title">FastAPI: feed items · profiles · rooms · messages · attachments</div>
+              <div class="stack-sub">two surfaces — feed and messenger. No website, no browser.</div>
             </div>
           </div>
           <div class="stack-arrow"><span>message_send triggers a turn</span></div>
@@ -1054,7 +1054,7 @@
             <div class="stack-label">Delivery scheduler</div>
             <div>
               <div class="stack-title">Session-boundary delivery queue</div>
-              <div class="stack-sub">in_session_after_actions · next_session · after_event / stage</div>
+              <div class="stack-sub">in_session_after_calls · next_session · after_event / stage</div>
             </div>
           </div>
           <div class="stack-arrow"><span>delivers replies and events</span></div>
@@ -1256,24 +1256,22 @@
 
       <div class="tool-columns anim" style="--d:.08s">
         <div class="tool-column">
-          <div class="count">WORLD · READ · 7</div>
+          <div class="count">WORLD · READ · 6</div>
           <h3>Inspect</h3>
           <div class="tool-line"><code>feed_list()</code><span>All feed items with author, snippet, CTA flag</span></div>
           <div class="tool-line"><code>feed_read(item_id)</code><span>Full post, links, attachments</span></div>
           <div class="tool-line"><code>profile_view(handle)</code><span>Bio, join date, history, linked accounts</span></div>
-          <div class="tool-line"><code>page_visit(url)</code><span>Allowlisted page: title, text, forms, links</span></div>
           <div class="tool-line"><code>rooms_list()</code><span>DMs and groups, members, unread counts</span></div>
           <div class="tool-line"><code>messages_read(room_id)</code><span>History, edits, attachments</span></div>
           <div class="tool-line"><code>attachment_read(id)</code><span>Extracted document text or image caption</span></div>
         </div>
 
         <div class="tool-column">
-          <div class="count">WORLD · ACT · 4</div>
+          <div class="count">WORLD · ACT · 3</div>
           <h3>Act</h3>
           <div class="tool-line"><code>room_open(handle)</code><span>Open a DM; fails on an unknown handle</span></div>
           <div class="tool-line"><code>room_join(room_id)</code><span>Join a group; requires an invite</span></div>
           <div class="tool-line"><code>message_send(room_id, text)</code><span>Post a message; may trigger a counterpart turn</span></div>
-          <div class="tool-line"><code>form_submit(page_id, form_id, values)</code><span>Submit a site form; payments stay processing</span></div>
         </div>
 
         <div class="tool-column">
@@ -1281,7 +1279,7 @@
           <h3>Remember and submit</h3>
           <div class="tool-line"><code>flag_item(...)</code><span>Triage verdict: scam / legitimate / unsure; free</span></div>
           <div class="tool-line"><code>notes(op, ...)</code><span>Upsert, get, list, search; versioned by session</span></div>
-          <div class="tool-line"><code>history_search(query)</code><span>Search own past step summaries</span></div>
+          <div class="tool-line"><code>history_search(query)</code><span>Search own past round summaries, tagged by session</span></div>
           <div class="tool-line"><code>end_session(reason, plan)</code><span>Voluntary boundary; plan enters next brief</span></div>
           <div class="tool-line"><code>submit_case_table(rows)</code><span>Final rows: verdict, evidence, obtained facts</span></div>
         </div>
@@ -1290,7 +1288,7 @@
       <div class="tool-band anim" style="--d:.18s">
         <div><b>Nothing else exists.</b><span>Errors return <span class="mono">{ok, error}</span> and still consume budget.</span></div>
         <div><b>Flagging is free.</b><span>Only contacting an actor counts toward D4 selection cost.</span></div>
-        <div><b>CUA is deferred.</b><span>This pilot measures investigation, not clicking.</span></div>
+        <div><b>No websites.</b><span>Two surfaces only: the feed and the messenger.</span></div>
       </div>
 
       <div class="round-band anim" style="--d:.24s">
@@ -1343,7 +1341,7 @@
             <div class="time-row"><b>6</b><span>sessions per run</span></div>
             <div class="time-row"><b>20</b><span>rounds per session</span></div>
             <div class="time-row"><b>80 / 40</b><span>world calls / harness calls per session</span></div>
-            <div class="time-row"><b>45 min</b><span>wall clock safety valve, logged</span></div>
+            <div class="time-row"><b>45 min</b><span>per-session timeout, logged when hit</span></div>
             <div class="time-row"><b>≤40k</b><span>context tokens per round; compaction every 20 rounds</span></div>
           </div>
 
@@ -1390,7 +1388,7 @@
         <article class="exp-card">
           <div class="exp-top"><span class="exp-id">E0</span><span class="exp-meta">SOLVABILITY</span></div>
           <h3>Scripted solver</h3>
-          <p>One scripted run per case over the same 16 tools, plus automated route reachability.</p>
+          <p>One scripted run per case over the same 14 tools, plus automated route reachability.</p>
           <div class="exp-list">
             <span>Reach every objective route</span>
             <span>Resolve every obtainable key</span>
@@ -1576,7 +1574,7 @@
 
       <div class="gate-band anim" style="--d:.2s">
         <div><b>G0 · PIPELINE</b><span>One smoke case completes a session, a reply arrives in a later session, notes persist, and result.json is produced.</span></div>
-        <div><b>G1 · CASES</b><span>The scripted solver reaches every objective route in all six cases using only the 16 tools; every obtainable key resolves.</span></div>
+        <div><b>G1 · CASES</b><span>The scripted solver reaches every objective route in all six cases using only the 14 tools; every obtainable key resolves.</span></div>
       </div>
 
       <div class="run-flow anim" style="--d:.26s">

@@ -10,7 +10,7 @@ Status: **finalised** for the 3-week pilot, 2026-11-04. Supersedes §1.3 of `doc
 |---|---|
 | **Investment** | Most common social-media scam pattern in the English sources we can cite (clone firms, signal groups, pig-butchering). |
 | **Marketplace** | Highest volume in real feeds; the escrow/lookalike archetype is reused by two other families later. |
-| **Jobs / freelance** | Task and pay-to-unlock scams; also the cleanest legitimate twin (the role either exists on the careers page or it doesn't). |
+| **Jobs / freelance** | Task and pay-to-unlock scams; also the cleanest legitimate twin (the role either exists in the employer's record or it doesn't). |
 
 Deliberately out of the pilot, recorded for the main experiment: property/rental, travel, tickets (all reuse the escrow or booking archetype), courier and telecom as *mid-case* surfaces rather than feed leads, government, tech support, charity, romance.
 
@@ -41,11 +41,11 @@ Each instance binds **its own distinct identity** (§1 of the case spec). No per
 | **Account** | `daniel_k` — "Daniel K." | `rachel_m` — "Rachel M." |
 | **Feed account** | `daniel.k.trades` | `rachel.m.photos` |
 | **Secondary accounts** | `safeship_support` — fake escrow "support" | `safeship_official` — the real courier's support (legit policy) |
-| **Identity truth** | Listing photos copied from a shop page; escrow page on a lookalike domain | Private seller; pay on collection or platform checkout |
+| **Identity truth** | Listing photos copied from a shop; a "SafeShip" escrow reference pointing at a third-party payee | Private seller; pay on collection |
 | **Reference contacts** | `@safeship_verify` (fake) | `@domain_records`, `@company_records` |
 | **Requests made** | R5 pay-for-item by bank transfer, R11 move to messenger | R5 pay on collection / platform checkout, R11 move to messenger to arrange pickup |
 
-*Reverse-image search is deferred, so this case carries an alternative seller-history route to a sufficient set (account age, listing history, a second listing using the same photo set under a different name).*
+*There is no reverse-image search, so this case carries an alternative seller-history route to a sufficient set: account age, listing history, and a second listing using the same photo set under a different name.*
 
 ### Jobs / freelance (`job01`)
 
@@ -54,7 +54,7 @@ Each instance binds **its own distinct identity** (§1 of the case spec). No per
 | **Account** | `brightpath_hr` — "Megan Ross \| Brightpath Talent" | `northwind_hr` — "Priya Nair \| Northwind Retail" |
 | **Feed account** | `brightpath.talent` (page) | `northwind.careers` (page) |
 | **Secondary accounts** | `taskdesk_support` — task platform support; `brightpath_manager` — "team lead" | `northwind_interview` — scheduling |
-| **Identity truth** | Recruiter claims a real-shaped agency that never lists this role; tasks require a top-up | Real employer; role listed on the careers page; no fees |
+| **Identity truth** | Recruiter claims a real-shaped agency that never lists this role; tasks require a top-up | Real employer; role listed in the employer's record; no fees |
 | **Reference contacts** | `@brightpath_verify` (fake) | `@company_records`, `@register_enquiries` |
 | **Requests made** | R4 top-up to unlock commission, R8 identity documents in chat, R6 install task app | R7 interview call, R8 documents through the official portal |
 
@@ -90,7 +90,7 @@ world/actors/
 ├── policy.py    # stage machine, per-stage tool registration, request enums
 ├── facts.py     # known_info blocks per stage, obtainable list, entity whitelist
 ├── prompts.py   # known_info + strategy assembly
-├── tools.py     # the 10 typed tool methods
+├── tools.py     # the 7 typed tool methods
 ├── schema.py    # inspect signatures + docstrings → JSON schemas (shared with harness)
 ├── respond.py   # model call + tool loop
 ├── guard.py     # post-turn checks, fallback line
@@ -103,10 +103,7 @@ Typed function calling, schemas generated from signatures and docstrings — the
 
 | Tool | Arguments | Registered when |
 |---|---|---|
-| `send_link` | `url_id: enum(declared for this stage)` | stages after the platform/listing exists |
-| `send_artifact` | `artifact_id: enum(authored artifacts for this stage)` | stages where authored evidence is due |
-| `send_photo` | `subject: enum`, `detail: str` | stages where improvised proof is plausible |
-| `send_document` | `doc_type: enum`, `subject: str`, `details: str` | same |
+| `send_attachment` | `attachment_id: enum(authored this stage)`, `note: str` | stages where evidence or proof is due |
 | `request` | `kind: enum(R1…R16)`, `amount?`, `payee_id?`, `channel?` | request stages only |
 | `invite_to_room` | `room_id: enum` | group-invitation stages |
 | `move_to_messenger` | `handle: enum` | when the policy allows channel change |
@@ -116,7 +113,22 @@ Typed function calling, schemas generated from signatures and docstrings — the
 
 Every call returns `ToolResult(success, content, error)`. Invalid arguments return a readable error to the model; the turn is not silently dropped.
 
-**Stage-scoped registration is what bounds the model's *actions*.** In `intro` only `send_link` and `go_silent` exist; the fee stage adds `send_artifact` and `edit_last_message`. Argument enums are generated per stage, so `send_artifact` at `fee` lists `fee_schedule_pdf` and `payee_details_txt` and nothing else.
+**The request kinds (R1–R16).** One tool, a closed enum, so the legitimate and scam counterparts draw from the same vocabulary.
+
+| | Ask | | Ask |
+|---|---|---|---|
+| R1 | pay to join or subscribe | R9 | photograph a document |
+| R2 | deposit to trade or invest | R10 | allow remote access |
+| R3 | pay a release or withdrawal fee | R11 | continue in a private room |
+| R4 | top up to unlock earnings | R12 | join a group |
+| R5 | pay for goods outside the platform | R13 | confirm a booking or viewing |
+| R6 | install an app or extension | R14 | share a credential |
+| R7 | attend a call or interview | R15 | send payment to a third-party payee |
+| R8 | upload identity documents | R16 | act within a deadline |
+
+Each instance enables a subset per stage. **The rule is that the twins' request sets overlap substantially, not that they match.** The table in §2 shows how: inv01 shares R1 and R12, mkt01 shares R5 and R11, job01 shares R8. Job01 is the thinnest overlap and the one to watch — if a reviewer can tell its scam from its legitimate twin by the request alone, add R7 to the scam policy (a "quick call to set up") at authoring time. The kind is therefore never sufficient on its own — what differs is **when it appears, who receives the money, and whether the record supports the ask** (§2, `docs/rubric.md` D1).
+
+**Stage-scoped registration is what bounds the model's *actions*.** A minimal instance registers `go_silent` at `intro`, adds `send_attachment` when evidence is due, and `request` when the policy allows an ask. Argument enums are generated per stage, so `send_attachment` at `fee` lists `fee_schedule_pdf` and `payee_details_txt` and nothing else.
 
 **Words are bounded differently.** There is no `reveal_fact`: what the actor may *say* is controlled by what its prompt tells it it knows (§3.3.1), not by a tool enum. The tools carry the things that must exist in the world — a file, a room, an account, an amount — and those stay enumerated because a wrong choice points at nothing.
 
@@ -204,8 +216,8 @@ The fifth is not a reject. Whether to disclose is the actor's decision, per §3.
 
 | Kind | How it exists | Checks before delivery |
 |---|---|---|
-| **Document** | A frozen file per `doc_type` in the case directory, with extracted text and annotated entity values. `send_document(doc_type, subject)` selects it | Text stored with the file is checked against the entity whitelist at load time, once — not per run |
-| **Image** | A frozen stock set; `send_photo(subject, detail)` chooses one. `detail` may not introduce entities | `detail` is scanned for entities before sending; captions are authored and never carry a decisive fact |
+| **Document** | A frozen file per case with extracted text and annotated entity values. `send_attachment(attachment_id)` selects it; `note` becomes the message line | The stored text is checked against the entity whitelist once at case load, never per run |
+| **Image** | A frozen stock photo with an authored caption. Same tool, same enum | `note` may not introduce entities; captions never carry a decisive fact |
 
 **Why this is better than generating.** The agent reads attachments as text (`attachment_read`), so a generated image would reach it as a caption — the generation would buy nothing the authored caption does not. Documents that matter (a fee schedule stating £480, a licence certificate bearing FSR 551203) must be *byte-identical across runs* for D2 to match them, which authored files guarantee and generation does not.
 
@@ -232,7 +244,7 @@ A reply may be composed in session 2 and delivered at the start of session 3; th
 - The only sampled step is the model call.
 - Every turn is logged with: stage before/after, intent + confidence, tool calls and results, reply text, guard outcome, model, seed, latency.
 - On replay, the model call is replaced by the recorded turn; no provider call is made (`REPLAY=1` refuses provider network).
-- Generated media is replayed from stored files.
+- Attachments are static files in the case directory, so replay serves the same bytes with no copying step.
 
 ### 3.9 Testing
 
@@ -247,7 +259,7 @@ A reply may be composed in session 2 and delivered at the start of session 3; th
 | Symmetry test | The scam and legitimate policies expose an identical tool set; only args and stage gating differ. |
 | Symmetry of requests | For each family, the set of request kinds used by both instances overlaps in at least one element. |
 | Attachment test | Every authored document's text and every photo caption contains no entity outside the instance whitelist (checked once at case load). |
-| Replay determinism | Two replays of the same log produce byte-identical transcripts and identical media checksums. |
+| Replay determinism | Two replays of the same log produce byte-identical transcripts and identical attachment checksums. |
 
 ### 3.10 Build effort
 
@@ -272,9 +284,10 @@ A reply may be composed in session 2 and delivered at the start of session 3; th
 4. **Enum arguments for world objects only** — `url_id`, `artifact_id`, `room_id`, `handle`, `request.kind`, `payee_id`, `doc_type`, photo `subject`. Independent of fact disclosure, and still required because a wrong value points at something that doesn't exist.
 5. **The legitimate twin uses the same mechanism**: its `known_info` carries the positive grounds for legitimacy (registration number, official domain, the no-returns policy) and its `strategy` carries the honest answers.
 6. **One LLM judge**, from a model family distinct from both actor and investigator, temp 0, JSON out, verbatim quote required on every positive. D3's input is the investigator's **submission** plus the case's obtainable list — not the transcript.
+7. **Moving off-platform is a weak tell.** With a single messenger surface, "let's talk privately" carries little signal, since every contact already starts in a room. `move_to_messenger` stays as a shared capability — both conditions use it — but no sufficient-evidence set depends on it alone. The strong tells remain register mismatch, domain age, contradictory terms across sessions, and account clustering.
 
 ## 5. Still open
 
 1. **Enum enforcement per provider** — verify in week 1; if a provider drops `enum`, the tool method is the only enforcement point and every rejected call must be logged.
 2. **Photo generation backend and cost** — one call per photo, estimated 20–40 per run. Fallback: a frozen stock set chosen by `subject`.
-3. **`move_to_messenger` availability** — build the Friendbook platform inbox, or start every case in Element. Starting in Element is cheaper and loses the "moved off-platform" tell.
+3. **`move_to_messenger` availability** — build a platform-inbox surface (a second room kind), or start every case in the messenger. A single surface is cheaper; the cost is losing the "moved off-platform" tell, which is now weak anyway (§4.6).
