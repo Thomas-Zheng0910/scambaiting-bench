@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scambaiting Bench — Implementation Overview</title>
+<!-- Open in a browser. Arrow keys / space navigate · F toggles fullscreen · Ctrl/Cmd+P → Save as PDF. -->
+<style>
+  :root{
+    --paper:#f1ede3;
+    --paper-2:#faf8f1;
+    --ink:#15181d;
+    --ink-2:#1c2128;
+    --muted:#726d62;
+    --line:rgba(21,24,29,.17);
+    --line-light:rgba(241,237,227,.18);
+    --red:#d3452c;
+    --red-soft:rgba(211,69,44,.09);
+    --green:#1f6b50;
+    --green-soft:rgba(31,107,80,.08);
+    --amber:#a9741e;
+    --blue:#2c5d88;
+    --sans:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --mono:"SFMono-Regular","Cascadia Code","Liberation Mono",Consolas,monospace;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 50% 40%, #161b21 0%, #0b0e12 70%);
+    color:var(--ink);
+    font-family:var(--sans);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  h1,h2,h3,p{margin:0}
+  h1{font-family:var(--serif);font-weight:400;font-size:112px;line-height:.9;letter-spacing:-.045em}
+  h2{font-family:var(--serif);font-weight:400;font-size:54px;line-height:1.02;letter-spacing:-.025em;max-width:1250px}
+  h3{font-family:var(--sans);font-weight:650;font-size:20px;line-height:1.2;letter-spacing:-.01em}
+  strong{font-weight:650}
+  em{font-style:italic}
+
+  #stage{
+    position:absolute;top:50%;left:50%;
+    width:1600px;height:900px;
+    transform-origin:center center;
+    background:var(--paper);
+    box-shadow:0 40px 140px rgba(0,0,0,.62);
+  }
+
+  .slide{
+    position:absolute;inset:0;
+    padding:46px 72px 54px;
+    background:var(--paper);
+    color:var(--ink);
+    display:flex;flex-direction:column;
+    opacity:0;visibility:hidden;
+    transform:translateY(14px) scale(.998);
+    transition:opacity .42s ease,transform .42s ease,visibility .42s;
+    overflow:hidden;
+  }
+  .slide.is-active{opacity:1;visibility:visible;transform:none}
+  .slide::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:radial-gradient(rgba(21,24,29,.055) 1px,transparent 1px);
+    background-size:26px 26px;
+    opacity:.55;
+    mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.5) 55%,transparent 92%);
+  }
+  .slide.dark{background:var(--ink);color:var(--paper)}
+  .slide.dark::before{background-image:radial-gradient(rgba(241,237,227,.08) 1px,transparent 1px);opacity:.7}
+  .slide > *{position:relative;z-index:1}
+
+  .slide-meta{
+    display:flex;justify-content:space-between;align-items:center;gap:24px;
+    padding-bottom:13px;border-bottom:1px solid var(--line);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted);flex:none;
+  }
+  .dark .slide-meta{color:rgba(241,237,227,.58);border-color:var(--line-light)}
+  .folio{color:var(--red);font-weight:600;letter-spacing:.08em}
+  .dark .folio{color:#ff8a74}
+
+  .slide-body{display:flex;flex-direction:column;flex:1;min-height:0;padding-top:30px}
+  .kicker{
+    display:flex;align-items:center;gap:10px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--red);margin-bottom:12px;
+  }
+  .kicker::before{content:"";width:24px;height:1px;background:currentColor}
+  .dark .kicker{color:#ff8a74}
+
+  .lead{font-size:19px;line-height:1.52;color:#3d3a34;max-width:920px;margin-top:15px}
+  .dark .lead{color:rgba(241,237,227,.74)}
+  .muted{color:var(--muted)}
+  .red{color:var(--red)}
+  .green{color:var(--green)}
+  .amber{color:var(--amber)}
+  .blue{color:var(--blue)}
+  .mono{font-family:var(--mono)}
+
+  .grid{display:grid;gap:20px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .cols-58{grid-template-columns:1.42fr .92fr}
+  .cols-62{grid-template-columns:1.6fr 1fr}
+  .mt-18{margin-top:18px}
+  .mt-24{margin-top:24px}
+  .mt-30{margin-top:30px}
+  .mt-38{margin-top:38px}
+  .mt-auto{margin-top:auto}
+
+  .card{
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.42);
+    padding:25px 25px 23px;
+    display:flex;flex-direction:column;gap:10px;
+    box-shadow:4px 4px 0 rgba(21,24,29,.035);
+  }
+  .card-num{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--red)}
+  .card p{font-size:14.5px;line-height:1.55;color:#4b4841}
+  .card h3{font-size:21px}
+
+  .callout{
+    display:flex;gap:17px;align-items:flex-start;
+    border-top:2px solid var(--ink);border-bottom:1px solid var(--line);
+    padding:17px 0;margin-top:28px;
+  }
+  .callout-mark{
+    font-family:var(--mono);font-size:11px;color:var(--red);
+    border:1px solid var(--red);width:29px;height:29px;
+    display:grid;place-items:center;flex:none;margin-top:1px;
+  }
+  .callout p{font-size:15.5px;line-height:1.55;max-width:1160px}
+  .dark .callout{border-top-color:var(--paper);border-bottom-color:var(--line-light)}
+  .dark .callout p{color:rgba(241,237,227,.88)}
+
+  /* ---------- cover ---------- */
+  .cover{padding-bottom:42px}
+  .cover-main{display:grid;grid-template-columns:1fr 360px;gap:60px;align-items:center;flex:1;padding-top:34px}
+  .cover-copy h1{font-size:128px}
+  .cover-copy h1 em{color:var(--red);font-style:italic}
+  .cover-copy .lede{
+    font-size:22px;line-height:1.45;color:rgba(241,237,227,.78);
+    max-width:780px;margin-top:28px;
+  }
+  .cover-file{
+    border:1px solid rgba(241,237,227,.28);
+    background:rgba(241,237,227,.035);
+    padding:22px 22px 18px;
+    transform:rotate(2.2deg);
+    position:relative;
+    font-family:var(--mono);
+    box-shadow:16px 16px 0 rgba(0,0,0,.18);
+  }
+  .cover-file::before{
+    content:"";position:absolute;left:-1px;top:-1px;width:52px;height:5px;background:var(--red);
+  }
+  .file-top{font-size:10px;letter-spacing:.16em;color:rgba(241,237,227,.55);padding-bottom:14px;border-bottom:1px solid rgba(241,237,227,.16)}
+  .file-bars{display:flex;flex-direction:column;gap:8px;padding:18px 0 16px}
+  .file-bars i{display:block;height:8px;background:rgba(241,237,227,.82)}
+  .file-bars i:nth-child(1){width:92%}
+  .file-bars i:nth-child(2){width:76%}
+  .file-bars i:nth-child(3){width:86%}
+  .file-bars i:nth-child(4){width:48%}
+  .file-row{display:flex;justify-content:space-between;gap:20px;font-size:10px;letter-spacing:.1em;padding:7px 0;border-top:1px solid rgba(241,237,227,.12);color:rgba(241,237,227,.45)}
+  .file-row strong{color:rgba(241,237,227,.9);font-weight:500}
+  .file-stamp{
+    margin-top:16px;border:1px solid var(--red);color:#ff8a74;
+    font-size:9px;letter-spacing:.18em;text-align:center;padding:7px 4px;
+    transform:rotate(-1.5deg);
+  }
+  .cover-stats{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+    border-top:1px solid rgba(241,237,227,.18);
+    border-bottom:1px solid rgba(241,237,227,.18);
+    margin-top:22px;
+  }
+  .cover-stats > div{padding:18px 26px 18px 0;display:flex;flex-direction:column;gap:5px}
+  .cover-stats > div + div{border-left:1px solid rgba(241,237,227,.14);padding-left:26px}
+  .cover-stats strong{font-family:var(--serif);font-size:30px;font-weight:400;line-height:1;color:var(--paper)}
+  .cover-stats span{font-size:11.5px;line-height:1.4;color:rgba(241,237,227,.52)}
+  .cover-foot{
+    display:flex;justify-content:space-between;gap:30px;
+    padding-top:16px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.13em;text-transform:uppercase;color:rgba(241,237,227,.4);
+  }
+
+  /* ---------- mission ---------- */
+  .mission-card{
+    background:var(--ink);color:var(--paper);
+    padding:30px 32px 24px;display:flex;flex-direction:column;gap:16px;
+    border-top:4px solid var(--red);box-shadow:10px 10px 0 rgba(21,24,29,.08);
+  }
+  .card-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:#eab3a8;text-transform:uppercase}
+  .mission-card blockquote{
+    margin:0;font-family:var(--serif);font-size:20.5px;line-height:1.46;
+    letter-spacing:-.005em;color:rgba(241,237,227,.94);
+  }
+  .mission-foot{
+    margin-top:auto;border-top:1px solid rgba(241,237,227,.16);
+    padding-top:13px;font-family:var(--mono);font-size:10px;line-height:1.6;
+    color:rgba(241,237,227,.52);
+  }
+  .mission-foot b{color:rgba(241,237,227,.86);font-weight:500}
+
+  .loop{display:flex;flex-direction:column;justify-content:space-between;border-left:1px solid var(--line);padding-left:26px}
+  .loop-step{display:grid;grid-template-columns:44px 1fr;gap:12px;padding:11px 0;align-items:start}
+  .loop-num{font-family:var(--serif);font-size:26px;line-height:1;color:var(--red)}
+  .loop-step h3{font-size:17px;margin-bottom:4px}
+  .loop-step p{font-size:12.5px;line-height:1.45;color:#5a564d}
+
+  .withheld{
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    border:1px solid var(--line);background:rgba(21,24,29,.035);
+    padding:13px 16px;margin-top:22px;
+  }
+  .withheld-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;color:var(--muted);margin-right:6px}
+  .chip{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;
+    background:var(--ink);color:rgba(241,237,227,.88);
+    padding:5px 8px;white-space:nowrap;
+  }
+
+  /* ---------- architecture ---------- */
+  .stack{display:flex;flex-direction:column}
+  .stack-box{
+    border:1px solid var(--line);background:var(--paper-2);
+    padding:13px 18px;display:grid;grid-template-columns:132px 1fr;gap:16px;align-items:center;
+  }
+  .stack-box.harness{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .stack-box.postgres{border-left:4px solid var(--red)}
+  .stack-box.internet{border-left:4px solid var(--blue)}
+  .stack-box.controller{border-left:4px solid var(--green)}
+  .stack-box.scoring{border-left:4px solid var(--amber)}
+  .stack-box.offline{border-left:4px solid var(--amber)}
+  .stack-box.sessions{border-left:4px solid var(--blue)}
+  .stack-label{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+  .harness .stack-label{color:#eab3a8}
+  .stack-title{font-size:15px;font-weight:650;line-height:1.2}
+  .stack-sub{font-family:var(--mono);font-size:9.5px;line-height:1.45;color:var(--muted);margin-top:3px}
+  .harness .stack-sub{color:rgba(241,237,227,.5)}
+  .stack-arrow{height:30px;position:relative;display:flex;align-items:center;padding-left:46px}
+  .stack-arrow::before{content:"";position:absolute;left:20px;top:0;bottom:0;width:1px;background:var(--line)}
+  .stack-arrow::after{
+    content:"";position:absolute;left:17px;bottom:0;
+    border-left:3px solid transparent;border-right:3px solid transparent;
+    border-top:5px solid var(--line);
+  }
+  .stack-arrow span{font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--muted);background:var(--paper);padding:2px 8px 2px 0}
+  .principles{display:flex;flex-direction:column;padding-top:2px}
+  .principle{display:grid;grid-template-columns:28px 1fr;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+  .principle:first-child{padding-top:0}
+  .principle:last-child{border-bottom:0}
+  .p-num{font-family:var(--mono);font-size:10px;color:var(--red);padding-top:2px}
+  .principle h3{font-size:15.5px;margin-bottom:4px}
+  .principle p{font-size:12.5px;line-height:1.5;color:#524e46}
+  .principles-note{
+    margin-top:auto;border:1px solid var(--line);background:rgba(211,69,44,.055);
+    padding:13px 15px;font-family:var(--mono);font-size:9.5px;line-height:1.6;color:#5a564d;
+  }
+
+  /* ---------- cases ---------- */
+  .case-card{
+    border:1px solid var(--line);background:var(--paper-2);
+    padding:21px 21px 18px;display:flex;flex-direction:column;gap:12px;
+    box-shadow:6px 6px 0 rgba(21,24,29,.035);min-height:402px;
+  }
+  .case-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .case-id{font-family:var(--mono);font-size:10px;letter-spacing:.13em;color:var(--red)}
+  .tag{
+    display:inline-block;font-family:var(--mono);font-size:8px;line-height:1;
+    letter-spacing:.09em;text-transform:uppercase;padding:5px 6px;border:1px solid;
+    white-space:nowrap;
+  }
+  .tag.red{color:var(--red);border-color:rgba(211,69,44,.45);background:rgba(211,69,44,.055)}
+  .tag.green{color:var(--green);border-color:rgba(31,107,80,.35);background:rgba(31,107,80,.055)}
+  .tag.amber{color:var(--amber);border-color:rgba(169,116,30,.4);background:rgba(169,116,30,.06)}
+  .case-card h3{font-family:var(--serif);font-size:25px;font-weight:400;line-height:1.05;letter-spacing:-.015em;min-height:52px}
+  .truth-row{display:grid;grid-template-columns:48px 1fr;gap:10px;padding:10px 0 0;border-top:1px solid var(--line)}
+  .truth-label{font-family:var(--mono);font-size:8.5px;letter-spacing:.11em;padding-top:4px}
+  .truth-label.scam{color:var(--red)}
+  .truth-label.legit{color:var(--green)}
+  .truth-row p{font-size:12.8px;line-height:1.52;color:#45423b}
+  .case-detail{margin-top:auto;font-size:11px;line-height:1.45;color:#5a564d}
+  .case-detail b{font-family:var(--mono);font-size:8px;color:var(--red);letter-spacing:.1em;display:block;margin-bottom:3px}
+  .checks{border-top:1px solid var(--line);padding-top:11px;font-size:11px;line-height:1.5;color:var(--muted)}
+  .checks b{font-family:var(--mono);font-size:8.5px;color:var(--ink);letter-spacing:.1em;display:block;margin-bottom:4px}
+
+  /* ---------- feed ---------- */
+  .feed-panel{
+    background:#fff;border:1px solid var(--line);
+    box-shadow:12px 12px 0 rgba(21,24,29,.06);overflow:hidden;
+  }
+  .feed-head{display:flex;justify-content:space-between;align-items:center;padding:13px 15px 10px}
+  .feed-wordmark{font-family:var(--serif);font-weight:700;font-size:18px;letter-spacing:-.03em;color:#2456a0}
+  .feed-icons{font-family:var(--mono);font-size:9px;color:#8b867a;letter-spacing:.1em}
+  .feed-tabs{display:flex;gap:18px;padding:0 15px 10px;border-bottom:1px solid #e8e3d7;font-size:10.5px;color:#777267}
+  .feed-tabs b{color:#2456a0;position:relative;font-weight:650}
+  .feed-tabs b::after{content:"";position:absolute;left:0;right:0;bottom:-10px;height:2px;background:#2456a0}
+  .feed-item{display:grid;grid-template-columns:30px 1fr auto;gap:9px;padding:10px 14px;border-top:1px solid #eee9dd;align-items:start}
+  .feed-item:first-of-type{border-top:0}
+  .avatar{width:27px;height:27px;border-radius:50%;background:#ddd7c7;color:#5c574b;display:grid;place-items:center;font-size:9px;font-weight:700;letter-spacing:.02em}
+  .feed-item .who{font-size:10.5px;font-weight:650;color:#24282e;line-height:1.3}
+  .feed-item .who span{font-weight:400;color:#989284;font-size:9px}
+  .feed-item .txt{font-size:10.8px;line-height:1.4;color:#4b4840;margin-top:1px}
+  .feed-item .tag{margin-top:1px}
+  .feed-scroll{padding:8px 14px 10px;text-align:center;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:#a39d8e;border-top:1px solid #eee9dd}
+
+  .bar{display:flex;height:16px;width:100%;margin:14px 0 18px;border:1px solid rgba(21,24,29,.1)}
+  .bar span{display:block;height:100%}
+  .legend{display:flex;flex-direction:column;gap:9px}
+  .legend-row{display:grid;grid-template-columns:12px 1fr auto;gap:9px;align-items:center;font-size:12px;line-height:1.35;color:#4b4841}
+  .swatch{width:9px;height:9px;display:block}
+  .legend-row b{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink)}
+  .rule-list{display:flex;flex-direction:column;gap:7px;margin-top:16px}
+  .rule-list p{position:relative;padding-left:15px;font-size:11.5px;line-height:1.45;color:#555149}
+  .rule-list p::before{content:"";position:absolute;left:0;top:7px;width:7px;height:1px;background:var(--red)}
+  .feed-meta{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);background:#fff;margin-top:14px}
+  .feed-meta > div{padding:9px 12px}
+  .feed-meta > div + div{border-left:1px solid var(--line)}
+  .feed-meta span{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;color:var(--muted);margin-bottom:3px}
+  .feed-meta b{font-family:var(--mono);font-size:9.5px;color:var(--ink);font-weight:600}
+  .feed-note{margin-top:10px;border-left:3px solid var(--red);background:var(--red-soft);padding:9px 12px;font-size:10.5px;line-height:1.45;color:#5a564d}
+  .feed-note b{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--red);margin-bottom:2px}
+  .feed-callout{
+    margin-top:auto;border-left:3px solid var(--amber);background:rgba(169,116,30,.06);
+    padding:11px 13px;font-size:11.5px;line-height:1.5;color:#5a564d;
+  }
+  .feed-callout b{color:var(--ink)}
+
+  /* ---------- actors ---------- */
+  .pipe{display:flex;align-items:stretch;gap:5px}
+  .pipe-step{
+    flex:1;border:1px solid var(--line);background:var(--paper-2);
+    padding:14px 11px 12px;display:flex;flex-direction:column;gap:6px;min-height:142px;
+  }
+  .pipe-step .n{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--red)}
+  .pipe-step h3{font-size:13.5px;line-height:1.15}
+  .pipe-step p{font-size:10.5px;line-height:1.4;color:#5b574e}
+  .pipe-step .eg{margin-top:auto;border-top:1px solid var(--line);padding-top:5px;font-family:var(--mono);font-size:7.8px;line-height:1.35;color:var(--muted)}
+  .pipe-arrow{display:grid;place-items:center;width:16px;flex:none;color:var(--red);font-size:14px}
+  .stage-strip{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:15px;font-family:var(--mono);font-size:9.5px}
+  .stage-label{letter-spacing:.11em;color:var(--red);margin-right:2px}
+  .stage-label.legit{color:var(--green);margin-left:14px}
+  .stage{background:var(--ink);color:rgba(241,237,227,.9);padding:4px 7px}
+  .stage.legit-stage{background:rgba(31,107,80,.1);color:var(--green);border:1px solid rgba(31,107,80,.3)}
+  .stage-arrow{color:#9a9588}
+  .actor-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px}
+  .actor-card{border:1px solid var(--line);background:rgba(255,255,255,.35);padding:19px 20px;min-height:148px}
+  .actor-card h3{font-size:15.5px;margin-bottom:8px}
+  .actor-card p{font-size:12.5px;line-height:1.52;color:#514d45}
+  .actor-band{
+    margin-top:auto;background:var(--ink);color:var(--paper);
+    display:grid;grid-template-columns:1fr 1.12fr;border-left:4px solid var(--red);
+  }
+  .actor-band > div{padding:20px 24px}
+  .actor-band > div + div{border-left:1px solid rgba(241,237,227,.16)}
+  .actor-band .cl{font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:#ff8a74;margin-bottom:7px}
+  .actor-band p{font-family:var(--serif);font-size:19px;line-height:1.36;letter-spacing:-.005em;color:rgba(241,237,227,.9)}
+  .actor-band em{color:#ff8a74}
+
+  /* ---------- desktop mock ---------- */
+  .desktop-frame{
+    position:relative;height:566px;border:1px solid rgba(21,24,29,.35);
+    background:linear-gradient(135deg,#c8c1b1 0%,#e2dccd 55%,#cbc4b4 100%);
+    box-shadow:14px 14px 0 rgba(21,24,29,.07);overflow:hidden;
+  }
+  .desk-bar{
+    height:27px;background:#242a31;color:rgba(241,237,227,.62);
+    display:flex;align-items:center;gap:7px;padding:0 10px;
+    font-family:var(--mono);font-size:8px;letter-spacing:.06em;
+  }
+  .dot{width:7px;height:7px;border-radius:50%;display:block}
+  .dot.r{background:#d95b4a}.dot.y{background:#c9a04b}.dot.g{background:#5a9a6e}
+  .desk-title{margin-left:8px}
+  .browser{
+    position:absolute;top:47px;left:23px;width:618px;height:429px;
+    background:#fff;border:1px solid #8d887b;box-shadow:7px 7px 0 rgba(21,24,29,.18);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .browser-bar{
+    height:31px;background:#ddd7c8;border-bottom:1px solid #bdb6a6;
+    display:flex;align-items:center;gap:9px;padding:0 10px;flex:none;
+  }
+  .traffic{display:flex;gap:4px}
+  .traffic i{width:6px;height:6px;border-radius:50%;background:#a8a293;display:block}
+  .url{
+    flex:1;background:#f6f3eb;border:1px solid #c9c2b2;color:#5e5a50;
+    font-family:var(--mono);font-size:8px;padding:4px 7px;
+  }
+  .browser-body{padding:11px 13px;overflow:hidden}
+  .fb-head{display:flex;justify-content:space-between;align-items:center}
+  .fb-wordmark{font-family:var(--serif);font-weight:700;font-size:19px;letter-spacing:-.03em;color:#2456a0}
+  .fb-avatar{width:18px;height:18px;border-radius:50%;background:#2456a0;color:#fff;display:grid;place-items:center;font-size:7px}
+  .fb-tabs{display:flex;gap:14px;font-size:9px;color:#858074;border-bottom:1px solid #e8e2d5;padding:8px 0 6px;margin-bottom:7px}
+  .fb-tabs b{color:#2456a0}
+  .mock-post{display:grid;grid-template-columns:22px 1fr;gap:7px;padding:7px 0;border-bottom:1px solid #f0ece2}
+  .mock-av{width:20px;height:20px;border-radius:50%;background:#ddd7c7}
+  .mock-line{height:5px;background:#e8e3d8;margin:4px 0}
+  .mock-line.w1{width:30%}.mock-line.w2{width:70%}.mock-line.w3{width:52%}
+  .mock-line.blue{background:#cdddf0}
+  .mock-ad{border:1px solid rgba(211,69,44,.5);background:rgba(211,69,44,.035);padding:6px;margin:3px 0}
+  .mock-ad .mock-line{background:#f0c9c2}
+  .element{
+    position:absolute;right:24px;bottom:43px;width:374px;height:318px;
+    background:#fff;border:1px solid #8d887b;box-shadow:10px 10px 0 rgba(21,24,29,.2);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .element-bar{
+    height:31px;background:#1f6b50;color:#f1ede3;display:flex;align-items:center;justify-content:space-between;
+    padding:0 10px;font-family:var(--mono);font-size:8px;letter-spacing:.04em;flex:none;
+  }
+  .element-body{padding:10px;display:flex;flex-direction:column;gap:7px;flex:1;background:#fbfaf6}
+  .el-name{font-size:9px;font-weight:650;color:#2f2c27;margin-bottom:2px}
+  .bubble{max-width:84%;padding:6px 8px;font-size:8.5px;line-height:1.4;color:#3d3a34;background:#eee9df;border-radius:5px}
+  .bubble.out{align-self:flex-end;background:#d8eadf;color:#25523f}
+  .element-input{
+    margin-top:auto;border:1px solid #ddd6c8;background:#fff;color:#a39d8e;
+    font-size:8px;padding:6px 8px;
+  }
+  .dock{
+    position:absolute;left:50%;bottom:10px;transform:translateX(-50%);
+    display:flex;gap:9px;padding:6px 9px;background:rgba(28,33,40,.72);
+    border:1px solid rgba(241,237,227,.15);border-radius:7px;
+  }
+  .dock i{width:15px;height:15px;border-radius:3px;background:rgba(241,237,227,.72);display:block}
+  .dock i:nth-child(1){background:#d3452c}
+  .dock i:nth-child(2){background:#2c5d88}
+  .dock i:nth-child(3){background:#a9741e}
+  .tool-section{border:1px solid var(--line);background:var(--paper-2);padding:18px 19px}
+  .tool-section + .tool-section{margin-top:11px}
+  .tool-label{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);margin-bottom:10px}
+  .tool-row{display:grid;grid-template-columns:158px 1fr;gap:10px;padding:6px 0;border-top:1px solid var(--line);align-items:baseline}
+  .tool-row:first-of-type{border-top:0}
+  .tool-row code{font-family:var(--mono);font-size:9.5px;color:var(--ink);letter-spacing:-.01em}
+  .tool-row span{font-size:11px;line-height:1.4;color:#5b574e}
+  .desk-note{margin-top:11px;border-left:3px solid var(--red);background:var(--red-soft);padding:11px 13px;font-size:11.5px;line-height:1.5;color:#5a564d}
+  .desk-note b{color:var(--ink)}
+
+  /* ---------- instrumentation ---------- */
+  .panel{border:1px solid var(--line);background:var(--paper-2);padding:18px 20px}
+  .panel-label{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  .src-row{display:flex;gap:8px;flex-wrap:wrap}
+  .src-chip{
+    font-family:var(--mono);font-size:9.5px;line-height:1;color:#45423b;
+    border:1px solid var(--line);background:#fff;padding:7px 9px;
+  }
+  .flow{display:flex;align-items:stretch;gap:8px;margin-top:15px}
+  .flow-box{flex:1;border:1px solid var(--line);background:rgba(255,255,255,.55);padding:11px 13px}
+  .flow-box strong{display:block;font-size:12px}
+  .flow-box span{display:block;font-size:10px;line-height:1.4;color:var(--muted);margin-top:3px}
+  .flow-arrow{display:grid;place-items:center;width:18px;flex:none;color:var(--red);font-size:15px}
+  .def-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+  .def-card{border-top:3px solid var(--ink);padding:14px 2px 0}
+  .def-card:nth-child(2){border-top-color:var(--blue)}
+  .def-card:nth-child(3){border-top-color:var(--green)}
+  .def-card h3{font-size:14px;letter-spacing:.02em;text-transform:uppercase;margin-bottom:6px}
+  .def-card p{font-size:12.5px;line-height:1.5;color:#514d45}
+  .example-strip{
+    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+    margin-top:18px;border:1px solid var(--line);background:#fff;padding:13px 16px;
+    font-family:var(--mono);font-size:9.5px;color:#5a564d;
+  }
+  .example-strip b{color:var(--green)}
+  .ungrounded{margin-top:11px;border-left:4px solid var(--red);background:var(--red-soft);padding:13px 16px;font-size:13.5px;line-height:1.5;color:#4b4841}
+  .ungrounded strong{color:var(--red)}
+
+  /* ---------- scoring ---------- */
+  .score-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px}
+  .score-card{
+    border:1px solid var(--line);background:var(--paper-2);
+    padding:17px 16px 15px;display:flex;flex-direction:column;gap:7px;min-height:228px;
+  }
+  .score-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .score-d{font-family:var(--serif);font-size:25px;line-height:1;color:var(--red)}
+  .score-type{font-family:var(--mono);font-size:7.5px;letter-spacing:.1em;color:var(--muted);border:1px solid var(--line);padding:3px 5px;white-space:nowrap}
+  .score-card h3{font-size:15.5px;line-height:1.2}
+  .score-card p{font-size:12.2px;line-height:1.48;color:#555149}
+  .headline-card{background:var(--ink);color:var(--paper);border-color:var(--ink);justify-content:flex-start}
+  .headline-card .score-type{color:rgba(241,237,227,.55);border-color:rgba(241,237,227,.2)}
+  .headline-card h3{font-family:var(--serif);font-size:22px;font-weight:400;line-height:1.1;margin-top:3px}
+  .headline-list{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+  .headline-list li{font-size:10.5px;line-height:1.35;color:rgba(241,237,227,.74);padding-left:11px;position:relative}
+  .headline-list li::before{content:"";position:absolute;left:0;top:5px;width:5px;height:5px;background:var(--red)}
+  .headline-list b{color:var(--paper);font-weight:600}
+
+  /* ---------- example ---------- */
+  .report-card{
+    background:var(--ink);color:var(--paper);padding:24px 26px;
+    font-family:var(--mono);font-size:11px;line-height:1.65;
+    box-shadow:12px 12px 0 rgba(21,24,29,.08);border-top:4px solid var(--red);
+  }
+  .report-top{display:flex;justify-content:space-between;color:rgba(241,237,227,.42);font-size:8.5px;letter-spacing:.12em;padding-bottom:13px;border-bottom:1px solid rgba(241,237,227,.15);margin-bottom:14px}
+  .report-row{display:grid;grid-template-columns:90px 1fr;gap:12px;padding:3px 0}
+  .report-row .k{color:rgba(241,237,227,.42)}
+  .report-row .v{color:rgba(241,237,227,.93)}
+  .report-row .v.red{color:#ff8a74}
+  .evidence-list{margin:13px 0 0;padding:11px 0 0;border-top:1px solid rgba(241,237,227,.15);display:flex;flex-direction:column;gap:8px}
+  .evidence-item{display:grid;grid-template-columns:28px 1fr;gap:8px;font-size:10px;line-height:1.55}
+  .evidence-item .fid{color:#ff8a74}
+  .evidence-item .src{display:block;color:rgba(241,237,227,.42);font-size:8.5px;margin-top:1px}
+  .report-note{margin-top:12px;border-top:1px solid rgba(241,237,227,.15);padding-top:10px;font-family:var(--sans);font-size:10.5px;line-height:1.5;color:rgba(241,237,227,.66)}
+  .report-note b{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:#ff8a74;margin-bottom:4px}
+  .supported{margin-top:13px;border-top:1px solid rgba(241,237,227,.15);padding-top:10px;color:#8ed1b3;font-size:10px}
+  .tl{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-left:1px solid var(--line)}
+  .tl-day{padding:0 16px;border-right:1px solid var(--line);position:relative}
+  .tl-day:last-child{border-right:0}
+  .tl-day::before{content:"";position:absolute;left:16px;top:38px;bottom:18px;width:1px;background:var(--line)}
+  .tl-day h3{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--red);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .tl-event{position:relative;padding-left:14px;margin-bottom:14px}
+  .tl-event::before{content:"";position:absolute;left:0;top:4px;width:5px;height:5px;border-radius:50%;background:var(--ink)}
+  .tl-event.hot::before{background:var(--red);box-shadow:0 0 0 3px rgba(211,69,44,.12)}
+  .tl-event .t{font-family:var(--mono);font-size:8.5px;color:var(--muted)}
+  .tl-event .e{font-size:11px;line-height:1.4;color:#45423b;margin-top:2px}
+  .example-foot{display:flex;justify-content:space-between;gap:24px;align-items:baseline;margin-top:18px;border-top:2px solid var(--ink);padding-top:11px;font-size:12px;line-height:1.45;color:#514d45}
+  .example-foot b{color:var(--ink)}
+
+  /* ---------- experiments ---------- */
+  .exp-grid{display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:262px 222px;gap:13px;margin-top:22px}
+  .exp-card{
+    grid-column:span 4;border:1px solid var(--line);background:var(--paper-2);
+    padding:19px 19px 17px;display:flex;flex-direction:column;gap:8px;
+  }
+  .exp-card.span8{grid-column:span 8}
+  .exp-card.main{background:#fff;border-top:3px solid var(--red);box-shadow:5px 5px 0 rgba(21,24,29,.04)}
+  .exp-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .exp-id{font-family:var(--mono);font-size:10px;letter-spacing:.13em;color:var(--red)}
+  .exp-meta{font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--muted)}
+  .exp-card h3{font-size:17px}
+  .exp-card p{font-size:11.5px;line-height:1.5;color:#555149}
+  .exp-list{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+  .exp-list span{position:relative;padding-left:12px;font-size:10.3px;line-height:1.38;color:#555149}
+  .exp-list span::before{content:"—";position:absolute;left:0;color:var(--red)}
+  .exp-tests{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:7px}
+  .exp-tests > div{border-left:2px solid var(--line);padding-left:8px}
+  .exp-tests b{display:block;font-family:var(--mono);font-size:7.8px;letter-spacing:.07em;color:var(--red);margin-bottom:2px}
+  .exp-tests span{font-size:9.8px;line-height:1.35;color:#555149}
+  .exp-readout{margin-top:auto;border-top:1px solid var(--line);padding-top:8px;font-size:10.3px;line-height:1.4;color:#555149}
+  .exp-readout b{display:block;font-family:var(--mono);font-size:7.8px;letter-spacing:.08em;color:var(--green);margin-bottom:2px}
+  .matrix{display:grid;grid-template-columns:78px 1fr 1fr;gap:7px 10px;margin-top:4px;font-family:var(--mono);font-size:8.5px;align-items:center}
+  .exp-card.main .matrix{margin-top:auto;padding-top:8px}
+  .matrix .h{color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+  .dots{display:flex;gap:4px}
+  .dots i{width:8px;height:8px;display:block;border-radius:50%;background:var(--red)}
+  .dots.alt i{background:var(--blue)}
+  .freeze-card{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .freeze-card h3{color:var(--paper)}
+  .freeze-card p{color:rgba(241,237,227,.62)}
+  .freeze-list{list-style:none;padding:0;margin:3px 0 0;display:flex;flex-direction:column;gap:5px}
+  .freeze-list li{font-family:var(--mono);font-size:9px;line-height:1.4;color:rgba(241,237,227,.76);padding-left:12px;position:relative}
+  .freeze-list li::before{content:"·";position:absolute;left:0;color:#ff8a74}
+  .freeze-card .exp-id{color:#ff8a74}
+
+  /* ---------- workstreams ---------- */
+  .ws-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-top:21px}
+  .ws-card{border:1px solid var(--line);background:var(--paper-2);padding:18px 18px 16px;display:flex;flex-direction:column;gap:9px;min-height:326px}
+  .ws-letter{font-family:var(--serif);font-size:34px;line-height:.9;color:var(--red)}
+  .ws-card h3{font-size:15.5px}
+  .ws-card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+  .ws-card li{font-size:10.8px;line-height:1.42;color:#555149;padding-left:10px;position:relative}
+  .ws-card li::before{content:"";position:absolute;left:0;top:6px;width:5px;height:1px;background:var(--muted)}
+  .gates{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:15px}
+  .gate{
+    border:1px solid var(--line);border-left:4px solid var(--red);
+    background:rgba(211,69,44,.035);padding:16px 18px;
+  }
+  .gate-top{display:flex;justify-content:space-between;gap:14px;align-items:baseline;margin-bottom:5px}
+  .gate-id{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--red)}
+  .gate h3{font-size:13.5px}
+  .gate p{font-size:10.8px;line-height:1.48;color:#555149;margin-top:3px}
+
+  /* ---------- risks ---------- */
+  .risk-table{width:100%;border-collapse:collapse;margin-top:18px}
+  .risk-table th{
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--muted);text-align:left;padding:0 12px 9px;border-bottom:2px solid var(--ink);
+  }
+  .risk-table td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13.5px;line-height:1.48}
+  .risk-table td:first-child{font-weight:650;width:21%}
+  .risk-table td:nth-child(2){color:#5a564d;width:38%}
+  .risk-table td:nth-child(3){color:#3f3c36}
+  .risk-table tr:last-child td{border-bottom:0}
+
+  /* ---------- done ---------- */
+  .done-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}
+  .done-card{border:1px solid var(--line);background:var(--paper-2);padding:23px 23px 20px;display:flex;flex-direction:column;gap:13px;min-height:400px}
+  .done-num{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--red)}
+  .done-card h3{font-family:var(--serif);font-size:27px;font-weight:400;line-height:1;letter-spacing:-.015em}
+  .check-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+  .check-list li{position:relative;padding-left:22px;font-size:12.5px;line-height:1.48;color:#4c4941}
+  .check-list li::before{
+    content:"✓";position:absolute;left:0;top:0;font-size:11px;color:var(--green);font-weight:700;
+  }
+  .done-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:10px;font-size:10.5px;line-height:1.45;color:#5a564d}
+  .done-foot b{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--red);margin-bottom:3px}
+  .done-quote{margin-top:24px;border-top:2px solid var(--ink);padding-top:15px;font-family:var(--serif);font-size:25px;line-height:1.3;letter-spacing:-.015em;color:#2d2a25}
+  .done-quote em{color:var(--red)}
+
+  /* ---------- decisions ---------- */
+  .decision-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+  .decision-card{border:1px solid var(--line);background:var(--paper-2);padding:17px 18px 15px;display:flex;flex-direction:column;gap:8px;min-height:225px}
+  .decision-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .decision-num{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--red)}
+  .decision-card h3{font-size:14.5px}
+  .decision-card .q{font-size:12.2px;line-height:1.48;color:#555149}
+  .decision-card .default{margin-top:auto;border-top:1px solid var(--line);padding-top:9px;font-size:11.2px;line-height:1.45;color:#4b4841}
+  .decision-card .default b{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--green);display:block;margin-bottom:3px}
+  .decision-foot{margin-top:16px;display:flex;align-items:center;gap:12px;font-size:12px;color:#555149}
+  .decision-foot .line{flex:1;height:1px;background:var(--line)}
+
+  /* ---------- closing ---------- */
+  .closing-main{flex:1;display:flex;flex-direction:column;justify-content:center;padding-top:10px}
+  .closing-main h1{font-size:78px;line-height:1.02;max-width:1250px}
+  .closing-main h1 em{color:#ff8a74}
+  .closing-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:42px;border-top:1px solid rgba(241,237,227,.18);border-bottom:1px solid rgba(241,237,227,.18)}
+  .closing-col{padding:20px 26px 20px 0}
+  .closing-col + .closing-col{border-left:1px solid rgba(241,237,227,.14);padding-left:26px}
+  .closing-col .cl{font-family:var(--mono);font-size:8.5px;letter-spacing:.15em;color:#ff8a74;margin-bottom:8px}
+  .closing-col h3{font-family:var(--serif);font-size:20px;font-weight:400;color:rgba(241,237,227,.94);margin-bottom:5px}
+  .closing-col p{font-size:11.5px;line-height:1.45;color:rgba(241,237,227,.52)}
+  .closing-foot{display:flex;justify-content:space-between;gap:30px;padding-top:18px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:rgba(241,237,227,.42)}
+  .closing-foot b{color:rgba(241,237,227,.8);font-weight:500}
+
+  /* ---------- refinements ---------- */
+  .fill{flex:1;min-height:0}
+  .why-cards .card{min-height:215px}
+  .why-band{
+    margin-top:auto;background:var(--ink);color:var(--paper);
+    display:grid;grid-template-columns:repeat(3,1fr);border-left:4px solid var(--red);
+  }
+  .why-band > div{padding:16px 20px;display:grid;grid-template-columns:24px 1fr;gap:9px;align-items:baseline;font-family:var(--serif);font-size:16px;line-height:1.32}
+  .why-band > div + div{border-left:1px solid rgba(241,237,227,.16)}
+  .why-band .n{font-family:var(--mono);font-size:8px;color:#ff8a74;letter-spacing:.1em}
+  .why-band .t{font-family:var(--serif);font-size:16px;color:rgba(241,237,227,.92)}
+
+  .run-facts{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    margin-top:14px;
+  }
+  .run-facts > div{padding:10px 15px;display:flex;align-items:baseline;gap:8px}
+  .run-facts > div + div{border-left:1px solid var(--line)}
+  .run-facts b{font-family:var(--serif);font-size:23px;font-weight:400;line-height:1;color:var(--ink)}
+  .run-facts span{font-size:10px;line-height:1.3;color:var(--muted)}
+
+  .case-note{
+    margin-top:auto;border-top:1px solid var(--line);padding-top:11px;
+    display:flex;justify-content:space-between;gap:24px;
+    font-size:11px;line-height:1.5;color:#5a564d;
+  }
+  .case-note b{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--red);margin-right:7px}
+
+  .judgeable-band{display:grid;grid-template-columns:1fr 1.55fr 1fr;border:1px solid var(--line);background:rgba(21,24,29,.03);margin-top:14px}
+  .judgeable-band > div{padding:10px 14px;display:flex;align-items:baseline;gap:9px}
+  .judgeable-band > div + div{border-left:1px solid var(--line)}
+  .judgeable-band b{font-family:var(--serif);font-size:24px;font-weight:400;line-height:1;color:var(--ink)}
+  .judgeable-band span{font-size:10px;line-height:1.35;color:var(--muted)}
+
+  .feed-side{display:flex;flex-direction:column;height:100%}
+  .feed-side .feed-callout{margin-top:auto}
+
+  .desk-side{display:flex;flex-direction:column;height:100%}
+  .desk-side .desk-note{margin-top:auto}
+  .session-budget{
+    margin-top:11px;border:1px solid var(--line);background:rgba(21,24,29,.035);
+    padding:11px 14px;font-family:var(--mono);font-size:9.5px;line-height:1.6;color:#555149;
+  }
+  .session-budget b{display:block;font-size:8px;letter-spacing:.12em;color:var(--red);margin-bottom:3px}
+
+  .judge-note{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px}
+  .judge-note > div{border:1px solid var(--line);background:rgba(255,255,255,.35);padding:11px 14px;font-size:11.5px;line-height:1.45;color:#514d45}
+  .judge-note b{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.11em;color:var(--red);margin-bottom:3px}
+  .judge-limit{margin-top:10px;border-left:3px solid var(--muted);background:rgba(21,24,29,.03);padding:9px 13px;font-size:11px;line-height:1.45;color:#5a564d}
+  .judge-limit b{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--muted);margin-right:6px}
+  .at-bottom{margin-top:auto !important}
+
+  .scoring-note{
+    margin-top:auto;border-top:1px solid var(--line);padding-top:11px;
+    display:flex;justify-content:space-between;gap:20px;
+    font-size:11.5px;line-height:1.5;color:#555149;
+  }
+  .scoring-note b{color:var(--ink)}
+
+  .example-side{display:flex;flex-direction:column;height:100%}
+  .example-side .tl{flex:1}
+  .example-side .example-foot{margin-top:auto}
+  .report-card{display:flex;flex-direction:column}
+  .report-card .supported{margin-top:auto}
+  .tl-day{display:flex;flex-direction:column}
+  .tl-end{
+    margin-top:auto;border-top:1px dashed var(--line);padding-top:8px;
+    font-family:var(--mono);font-size:8px;line-height:1.45;color:var(--muted);
+  }
+
+  .policy-note{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .policy-note span{font-size:10px;line-height:1.4;color:#555149}
+  .policy-note b{font-family:var(--mono);font-size:8px;letter-spacing:.09em;color:var(--red);margin-right:4px}
+  .exp-note{
+    margin-top:auto;border-top:1px solid var(--line);padding-top:11px;
+    display:flex;justify-content:space-between;gap:20px;
+    font-size:11.5px;line-height:1.5;color:#555149;
+  }
+  .exp-note b{color:var(--ink)}
+
+  .gate-list{list-style:none;padding:0;margin:6px 0 0;display:flex;flex-direction:column;gap:4px}
+  .gate-list li{position:relative;padding-left:16px;font-size:11px;line-height:1.45;color:#4f4b43}
+  .gate-list li::before{content:"✓";position:absolute;left:0;top:0;font-size:9px;color:var(--green);font-weight:700}
+  .ws-note{
+    margin-top:auto;border-top:1px solid var(--line);padding-top:10px;
+    font-size:11px;line-height:1.5;color:#555149;
+  }
+  .ws-note b{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--red);margin-right:6px}
+
+  .cut-band{
+    margin-top:15px;border:1px solid var(--line);display:grid;grid-template-columns:1.25fr 1fr;
+  }
+  .cut-band > div{padding:11px 15px}
+  .cut-band > div + div{border-left:1px solid var(--line);background:rgba(21,24,29,.035)}
+  .cut-band .cl{font-family:var(--mono);font-size:8px;letter-spacing:.12em;color:var(--red);margin-bottom:3px}
+  .cut-band p{font-size:11px;line-height:1.45;color:#514d45}
+  .cut-band b{color:var(--ink);font-weight:650}
+
+  .done-band{
+    margin-top:28px;background:var(--ink);color:var(--paper);
+    padding:22px 26px;display:grid;grid-template-columns:1.55fr .75fr;gap:34px;align-items:center;
+    border-left:4px solid var(--red);
+  }
+  .done-band .q{font-family:var(--serif);font-size:27px;line-height:1.25;letter-spacing:-.015em}
+  .done-band .q em{color:#ff8a74}
+  .done-band .next{font-family:var(--mono);font-size:9px;line-height:1.65;letter-spacing:.04em;color:rgba(241,237,227,.6)}
+  .done-band .next b{display:block;color:#ff8a74;letter-spacing:.14em;margin-bottom:4px;font-weight:500}
+
+  /* ---------- overview deck additions ---------- */
+  .cover-panel{
+    border:1px solid rgba(241,237,227,.28);background:rgba(241,237,227,.035);
+    padding:22px 22px 18px;box-shadow:14px 14px 0 rgba(0,0,0,.16);
+    transform:rotate(1.2deg);
+  }
+  .panel-kicker{
+    font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:#ff8a74;
+    padding-bottom:12px;border-bottom:1px solid rgba(241,237,227,.16);margin-bottom:8px;
+  }
+  .run-row{display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid rgba(241,237,227,.1)}
+  .run-row:last-child{border-bottom:0;padding-bottom:2px}
+  .run-row strong{font-family:var(--serif);font-size:31px;font-weight:400;line-height:1;color:var(--paper);min-width:34px}
+  .run-row span{font-size:10.5px;line-height:1.3;color:rgba(241,237,227,.52)}
+
+  .section-index{
+    display:grid;grid-template-columns:repeat(3,1fr);
+    border-top:1px solid rgba(241,237,227,.18);border-bottom:1px solid rgba(241,237,227,.18);
+    margin-top:22px;
+  }
+  .section-index > div{padding:15px 22px 15px 0;display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start}
+  .section-index > div + div{border-left:1px solid rgba(241,237,227,.14);padding-left:22px}
+  .section-index > div > span{font-family:var(--mono);font-size:9px;color:#ff8a74;letter-spacing:.1em;padding-top:2px}
+  .section-index b{display:block;font-size:12.5px;color:var(--paper);letter-spacing:-.01em}
+  .section-index em{display:block;font-style:normal;font-size:10px;color:rgba(241,237,227,.42);margin-top:2px}
+
+  .mini-list{list-style:none;margin:5px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+  .mini-list li{position:relative;padding-left:12px;font-size:10.8px;line-height:1.4;color:#555149}
+  .mini-list li::before{content:"—";position:absolute;left:0;color:var(--red)}
+
+  .run-flow{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    padding:13px 0;margin-top:26px;
+  }
+  .run-flow span{font-family:var(--mono);font-size:9px;letter-spacing:.09em;background:var(--ink);color:var(--paper);padding:6px 9px}
+  .run-flow i{color:var(--red);font-style:normal}
+  .run-flow em{margin-left:auto;font-style:normal;font-size:10.5px;line-height:1.4;color:var(--muted)}
+
+  .overview-table{width:100%;border-collapse:collapse;margin-top:20px}
+  .overview-table th{
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--muted);text-align:left;padding:0 12px 9px;border-bottom:2px solid var(--ink);
+  }
+  .overview-table td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:12.2px;line-height:1.45}
+  .overview-table td:first-child{width:14%}
+  .overview-table td:nth-child(2){width:31%}
+  .overview-table td:nth-child(3){width:31%}
+  .overview-table td:nth-child(4){width:24%;font-size:11px;color:var(--muted)}
+  .overview-table tr:last-child td{border-bottom:0}
+  .template-id{font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:.1em;display:block;margin-bottom:3px}
+
+  .authoring-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:16px}
+  .authoring-grid > div{border:1px solid var(--line);background:rgba(255,255,255,.35);padding:10px 11px;display:flex;flex-direction:column;gap:3px}
+  .authoring-grid span{font-family:var(--mono);font-size:8px;color:var(--red);letter-spacing:.1em}
+  .authoring-grid b{font-size:10.5px;line-height:1.25}
+  .authoring-grid em{font-style:normal;font-size:9px;color:var(--muted);line-height:1.3}
+
+  .time-row{display:grid;grid-template-columns:76px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:11.4px;line-height:1.42;color:#555149}
+  .time-row:first-of-type{border-top:0}
+  .time-row b{font-family:var(--mono);font-size:9.5px;font-weight:600;color:var(--ink)}
+
+  .metrics-table{width:100%;border-collapse:collapse}
+  .metrics-table td{padding:13px 10px;border-bottom:1px solid var(--line);vertical-align:top;font-size:11.8px;line-height:1.42}
+  .metrics-table tr:last-child td{border-bottom:0}
+  .metrics-table td:first-child{width:38px;font-family:var(--serif);font-size:19px;color:var(--red);line-height:1}
+  .metrics-table td:nth-child(2){width:142px;font-weight:650}
+  .metrics-table td:nth-child(3){color:#555149}
+
+  .primary-card{
+    background:var(--ink);color:var(--paper);padding:24px 26px;
+    display:flex;flex-direction:column;gap:9px;border-left:4px solid var(--red);
+  }
+  .primary-card h3{font-family:var(--serif);font-size:26px;font-weight:400;line-height:1.1;color:var(--paper)}
+  .primary-list{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .primary-list li{font-size:11.5px;line-height:1.4;color:rgba(241,237,227,.76);padding-left:13px;position:relative}
+  .primary-list li::before{content:"";position:absolute;left:0;top:5px;width:5px;height:5px;background:var(--red)}
+  .primary-list b{color:var(--paper)}
+
+  .artifact-list{display:flex;flex-direction:column;flex:1;justify-content:space-between}
+  .artifact-row{display:grid;grid-template-columns:172px 1fr;gap:12px;padding:8px 0;border-top:1px solid var(--line);align-items:baseline}
+  .artifact-row:first-child{border-top:0}
+  .artifact-row code{font-family:var(--mono);font-size:9.3px;color:var(--ink);letter-spacing:-.01em}
+  .artifact-row span{font-size:10.8px;line-height:1.4;color:#555149}
+
+  .score-flow{display:flex;align-items:stretch;gap:5px;margin-top:18px}
+  .score-flow > div{flex:1;border:1px solid var(--line);background:var(--paper-2);padding:10px 10px 9px}
+  .score-flow i{display:grid;place-items:center;width:14px;flex:none;color:var(--red);font-style:normal;font-size:12px}
+  .score-flow b{display:block;font-size:10.5px;line-height:1.2}
+  .score-flow span{display:block;font-size:8.8px;line-height:1.35;color:var(--muted);margin-top:2px}
+  .score-note{margin-top:12px;border-left:3px solid var(--muted);background:rgba(21,24,29,.03);padding:9px 13px;font-size:11px;line-height:1.45;color:#5a564d}
+  .score-note b{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--red);margin-right:6px}
+
+  .pass-output{margin-top:auto;border-top:1px solid var(--line);padding-top:10px;font-family:var(--mono);font-size:9px;line-height:1.45;color:var(--muted)}
+  .pass-output b{display:block;font-size:8px;letter-spacing:.1em;color:var(--red);margin-bottom:2px}
+
+  .pilot-band{
+    margin-top:18px;background:var(--ink);color:var(--paper);
+    display:grid;grid-template-columns:repeat(4,1fr);border-left:4px solid var(--red);
+  }
+  .pilot-band > div{padding:16px 20px}
+  .pilot-band > div + div{border-left:1px solid rgba(241,237,227,.16)}
+  .pilot-band b{display:block;font-family:var(--serif);font-size:27px;font-weight:400;line-height:1;color:var(--paper)}
+  .pilot-band span{display:block;font-size:10px;line-height:1.35;color:rgba(241,237,227,.5);margin-top:4px}
+
+  .tool-columns{display:grid;grid-template-columns:1.25fr .95fr 1.1fr;gap:12px;margin-top:20px}
+  .tool-column{border:1px solid var(--line);background:var(--paper-2);padding:15px 16px 13px;display:flex;flex-direction:column}
+  .tool-column .count{font-family:var(--mono);font-size:8px;letter-spacing:.12em;color:var(--red);margin-bottom:4px}
+  .tool-column h3{font-size:15px;margin-bottom:6px}
+  .tool-line{display:grid;grid-template-columns:160px 1fr;gap:8px;padding:10px 0;border-top:1px solid var(--line);align-items:baseline}
+  .tool-line code{font-family:var(--mono);font-size:9.2px;line-height:1.35;color:var(--ink);letter-spacing:-.02em}
+  .tool-line span{font-size:9.8px;line-height:1.35;color:#555149}
+  .tool-band{display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
+  .tool-band > div{padding:11px 16px 11px 0}
+  .tool-band > div + div{border-left:1px solid var(--line);padding-left:16px}
+  .tool-band b{display:block;font-size:11.5px;margin-bottom:2px}
+  .tool-band span{font-size:10px;line-height:1.4;color:#5a564d}
+
+  .round-band{margin-top:15px;border:1px solid var(--line);background:var(--paper-2);padding:13px 16px}
+  .round-flow{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+  .round-flow span{font-family:var(--mono);font-size:9px;padding:5px 8px;background:var(--ink);color:var(--paper)}
+  .round-flow i{color:var(--red);font-style:normal}
+  .round-flow em{font-style:normal;margin-left:auto;font-size:10.5px;color:var(--muted)}
+
+  .record-list{display:flex;flex-direction:column}
+  .record-item{padding:10px 0;border-top:1px solid var(--line)}
+  .record-item:first-child{border-top:0;padding-top:0}
+  .record-item h3{font-size:12.5px;margin-bottom:2px}
+  .record-item p{font-size:10.5px;line-height:1.4;color:#555149}
+  .record-item.fake h3{color:var(--red)}
+
+  .gate-band{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+  .gate-band > div{border:1px solid var(--line);border-left:4px solid var(--red);background:var(--red-soft);padding:12px 15px}
+  .gate-band b{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--red);margin-bottom:3px}
+  .gate-band span{font-size:10.5px;line-height:1.45;color:#555149}
+
+  .note-fields{margin-top:20px;border:1px solid var(--line);background:var(--paper-2);padding:13px 18px}
+  .note-fields .panel-label{margin-bottom:8px}
+  .note-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .note-chips span{font-family:var(--mono);font-size:9px;padding:5px 7px;background:#fff;border:1px solid var(--line);color:#4b4841}
+
+  /* ---------- chrome ---------- */
+  .chrome{position:fixed;inset:0;pointer-events:none;z-index:20}
+  .progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(241,237,227,.12)}
+  .progress span{display:block;height:100%;width:0;background:var(--red);transition:width .35s ease}
+  .nav{
+    position:absolute;right:20px;bottom:16px;display:flex;align-items:center;gap:4px;
+    background:rgba(12,15,19,.78);border:1px solid rgba(241,237,227,.14);
+    padding:4px;border-radius:999px;pointer-events:auto;backdrop-filter:blur(10px);
+  }
+  .nav button{
+    width:33px;height:33px;border-radius:50%;border:0;background:transparent;
+    color:rgba(241,237,227,.82);font-size:15px;cursor:pointer;display:grid;place-items:center;
+    transition:background .18s,color .18s;
+  }
+  .nav button:hover{background:var(--red);color:#fff}
+  #counter{
+    font-family:var(--mono);font-size:9px;letter-spacing:.08em;
+    color:rgba(241,237,227,.5);padding:0 7px;min-width:62px;text-align:center;
+  }
+  .nav-hint{
+    position:fixed;left:50%;bottom:68px;transform:translateX(-50%);
+    background:rgba(12,15,19,.82);border:1px solid rgba(241,237,227,.14);
+    color:rgba(241,237,227,.65);font-family:var(--mono);font-size:9px;letter-spacing:.09em;
+    padding:7px 11px;border-radius:999px;z-index:21;pointer-events:none;
+    transition:opacity .6s ease;backdrop-filter:blur(8px);
+  }
+  .nav-hint.hide{opacity:0}
+
+  .anim{opacity:1}
+  .slide.is-active .anim{animation:rise .62s cubic-bezier(.2,.7,.2,1) both;animation-delay:var(--d,0s)}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  @media print{
+    @page{size:1600px 900px;margin:0}
+    html,body{background:#fff;overflow:visible;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    #stage{position:static;transform:none !important;width:1600px;height:auto;box-shadow:none}
+    .slide{position:relative;inset:auto;width:1600px;height:900px;opacity:1 !important;visibility:visible !important;transform:none !important;page-break-after:always;break-after:page}
+    .slide .anim{animation:none !important}
+    .chrome,.nav-hint{display:none !important}
+  }
+</style>
+<noscript>
+  <style>
+    #stage{position:static!important;transform:none!important;margin:0 auto;width:1600px;height:auto}
+    .slide{position:relative!important;inset:auto!important;opacity:1!important;visibility:visible!important;transform:none!important;width:1600px;height:900px;page-break-after:always}
+    .chrome,.nav-hint{display:none!important}
+  </style>
+</noscript>
+</head>
+<body>
+
+<div id="stage">
+  <!-- 01 · COVER -->
+  <section class="slide dark cover is-active">
+    <div class="slide-meta">
+      <span>Implementation overview · v0.1</span>
+      <span class="folio">SCB / 01</span>
+    </div>
+
+    <div class="cover-main">
+      <div class="cover-copy">
+        <h1 class="anim">Scambaiting<br><em>Bench</em></h1>
+        <p class="lede anim" style="--d:.12s">Scambaiting Bench is a benchmark for tool-calling agents: an offline simulated social world where the agent investigates scam and legitimate offers over six sessions, and is scored on detection, evidence, scambaiting, and selection cost.</p>
+      </div>
+
+      <div class="cover-panel anim" style="--d:.22s">
+        <div class="panel-kicker">RUN AT A GLANCE</div>
+        <div class="run-row"><strong>6</strong><span>sessions per run</span></div>
+        <div class="run-row"><strong>6</strong><span>case instances (3 families × 2)</span></div>
+        <div class="run-row"><strong>11</strong><span>judgeable feed items</span></div>
+        <div class="run-row"><strong>16</strong><span>typed investigator tools</span></div>
+        <div class="run-row"><strong>1</strong><span>complete case table</span></div>
+      </div>
+    </div>
+
+    <div class="section-index anim" style="--d:.3s">
+      <div><span>01</span><div><b>Environment building</b><em>world server, cases, counterparts</em></div></div>
+      <div><span>02</span><div><b>Agent &amp; harness</b><em>tools, sessions, memory</em></div></div>
+      <div><span>03</span><div><b>Experiment</b><em>runs, rubric, outputs</em></div></div>
+    </div>
+
+    <div class="cover-foot">
+      <span>Group overview · implementation plan v0.1</span>
+      <span>Offline world · typed tools · synthetic content</span>
+    </div>
+  </section>
+
+  <!-- 02 · OVERVIEW -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>02 · Overview</span>
+      <span class="folio">SCB / 02</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Three parts</div>
+      <h2 class="anim">What we are building.</h2>
+      <p class="lead anim" style="--d:.08s">The plan has three parts: one world server, one investigator harness, and one pilot experiment.</p>
+
+      <div class="grid g3 mt-30 anim" style="--d:.14s">
+        <article class="card">
+          <div class="card-num">01 / ENVIRONMENT BUILDING</div>
+          <h3>A simulated world</h3>
+          <p>One FastAPI + Postgres server exposes the feed, rooms, pages, forms, and record services.</p>
+          <ul class="mini-list">
+            <li>Feed, profiles, pages, rooms, forms</li>
+            <li>Record services for verification</li>
+            <li>Counterpart engine and delivery scheduler</li>
+            <li>Six case instances and filler</li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="card-num">02 / AGENT &amp; HARNESS</div>
+          <h3>The investigator loop</h3>
+          <p>The agent works through typed tools over the world, not pixels or a desktop.</p>
+          <ul class="mini-list">
+            <li>11 world tools + 5 harness tools</li>
+            <li>Six sessions with round and call caps</li>
+            <li>Notes, flags, and a final case table</li>
+            <li>Investigator and counterpart harnesses</li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="card-num">03 / EXPERIMENT</div>
+          <h3>The pilot measurement</h3>
+          <p>Six instances are run under matched conditions and scored from logged tool results.</p>
+          <ul class="mini-list">
+            <li>3 scam + 3 legitimate + 5 suspicious</li>
+            <li>E0 solver; E1 AUTO; E1b FIXED</li>
+            <li>D1–D4 rubric</li>
+            <li>result.json + replay log</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="run-flow anim" style="--d:.22s">
+        <span>REVIEW FEED</span><i>→</i><span>CONTACT / VERIFY</span><i>→</i><span>JUDGE</span><i>→</i><span>SUBMIT TABLE</span>
+        <em>One run: six sessions, eleven judgeable items, one complete case table.</em>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 · ENVIRONMENT · WORLD SERVER -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>03 · Environment building</span>
+      <span class="folio">SCB / 03</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Environment · world server</div>
+      <h2 class="anim">One server is the environment.</h2>
+
+      <div class="grid cols-62 mt-24" style="gap:32px">
+        <div class="stack anim" style="--d:.08s">
+          <div class="stack-box harness">
+            <div class="stack-label">Investigator harness</div>
+            <div>
+              <div class="stack-title">Session loop · context · notes · flags · submission</div>
+              <div class="stack-sub">calls the 16 typed tools; no direct database access</div>
+            </div>
+          </div>
+          <div class="stack-arrow"><span>tool calls ↔ results</span></div>
+
+          <div class="stack-box internet">
+            <div class="stack-label">World server</div>
+            <div>
+              <div class="stack-title">FastAPI: feed · profiles · pages · rooms · messages · forms</div>
+              <div class="stack-sub">tenant pages, northbank, filescan; structured text; visual design not measured</div>
+            </div>
+          </div>
+          <div class="stack-arrow"><span>message_send triggers a turn</span></div>
+
+          <div class="stack-box sessions">
+            <div class="stack-label">Delivery scheduler</div>
+            <div>
+              <div class="stack-title">Session-boundary delivery queue</div>
+              <div class="stack-sub">in_session_after_actions · next_session · after_event / stage</div>
+            </div>
+          </div>
+          <div class="stack-arrow"><span>delivers replies and events</span></div>
+
+          <div class="stack-box controller">
+            <div class="stack-label">Counterpart engine</div>
+            <div>
+              <div class="stack-title">Persona + policy + guard · 10 counterpart tools</div>
+              <div class="stack-sub">same process; replies queued for the current or next session</div>
+            </div>
+          </div>
+          <div class="stack-arrow"><span>reads and writes world state</span></div>
+
+          <div class="stack-box postgres">
+            <div class="stack-label">Postgres 16</div>
+            <div>
+              <div class="stack-title">One row per world object</div>
+              <div class="stack-sub">snapshot per session boundary; synthetic timestamps</div>
+            </div>
+          </div>
+          <div class="stack-arrow"><span>every call · delivery · actor turn</span></div>
+
+          <div class="stack-box offline">
+            <div class="stack-label">Result &amp; replay</div>
+            <div>
+              <div class="stack-title">result.json · replay.jsonl.zst</div>
+              <div class="stack-sub">scoring input and exact replay log</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="principles anim" style="--d:.18s">
+          <div class="principle">
+            <div class="p-num">01</div>
+            <div><h3>One source of truth.</h3><p>The world database. The investigator reads it only through world tools.</p></div>
+          </div>
+          <div class="principle">
+            <div class="p-num">02</div>
+            <div><h3>The investigator cannot see the truth.</h3><p>No tool returns labels, target sets, policies, or future events.</p></div>
+          </div>
+          <div class="principle">
+            <div class="p-num">03</div>
+            <div><h3>The world changes for two reasons.</h3><p>Investigator calls, and scheduled deliveries at session boundaries. Nothing else moves.</p></div>
+          </div>
+          <div class="principle">
+            <div class="p-num">04</div>
+            <div><h3>Everything is replayable.</h3><p>Calls are fully specified, so replay re-executes them and asserts exact equality of results.</p></div>
+          </div>
+          <div class="principles-note">No desktop, browser, Matrix/Element, DNS, or video pipeline. The pilot environment is the world server.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 · ENVIRONMENT · CASES AND FEED -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>04 · Environment building</span>
+      <span class="folio">SCB / 04</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Environment · cases and feed</div>
+      <h2 class="anim">Six instances in one feed.</h2>
+      <p class="lead anim" style="--d:.08s">Three families, each with a scam and a legitimate instance. Every instance has its own fictional identity; the surface is similar, the evidence is not.</p>
+
+      <table class="overview-table anim" style="--d:.14s">
+        <thead>
+          <tr><th>Family</th><th>Scam instance</th><th>Legitimate instance</th><th>Key checks</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="template-id">INV01</span><b>Investment</b></td>
+            <td>Sponsored ad → mentor DM → VIP group with shills → platform with fake gains → release fee.</td>
+            <td>Licensed adviser DM → registration number → official onboarding → paid membership.</td>
+            <td>Register Enquiries · Company Records Desk · Domain Records</td>
+          </tr>
+          <tr>
+            <td><span class="template-id">MKT01</span><b>Marketplace</b></td>
+            <td>Below-market listing → messenger move → “SafeShip escrow” lookalike → bank transfer.</td>
+            <td>Seller history → pay on collection or platform checkout → messenger for pickup.</td>
+            <td>Seller history · Domain Records · official courier page</td>
+          </tr>
+          <tr>
+            <td><span class="template-id">JOB01</span><b>Jobs / freelance</b></td>
+            <td>“Remote product reviewer” ad → recruiter claims an agency → task desk → top up to unlock commission.</td>
+            <td>Real employer → role on careers page → interview step → no fees → official portal.</td>
+            <td>Company Records Desk · careers/staff page · Domain Records</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="run-facts anim" style="--d:.22s">
+        <div><b>6</b><span>case instances</span></div>
+        <div><b>5</b><span>suspicious-but-legit offers</span></div>
+        <div><b>30</b><span>filler items</span></div>
+        <div><b>11</b><span>judgeable items</span></div>
+      </div>
+
+      <div class="judgeable-band anim" style="--d:.26s">
+        <div><b>3</b><span>scam instances</span></div>
+        <div><b>8</b><span>legitimate judgeable items (3 cases + 5 suspicious offers)</span></div>
+        <div><b>—</b><span>ordinary cards carry no label; a verdict there is ignored</span></div>
+      </div>
+
+      <div class="case-note anim" style="--d:.32s;margin-top:14px">
+        <span><b>LEAD SOURCE</b>The feed is the only source. No search engine and no image search in the pilot.</span>
+        <span><b>NOT GIVEN</b>The agent is not told the counts, labels, or which offers are judgeable.</span>
+        <span><b>COMPLETENESS</b>Every judgeable item needs a verdict; unjudged counts as not-flagged.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 · ENVIRONMENT · COUNTERPARTS AND RECORD SERVICES -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>05 · Environment building</span>
+      <span class="folio">SCB / 05</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Environment · counterparts and verification</div>
+      <h2 class="anim">Counterparts and record services.</h2>
+
+      <div class="grid cols-58 mt-24" style="gap:30px">
+        <div class="anim" style="--d:.08s">
+          <div class="pipe">
+            <div class="pipe-step"><div class="n">01</div><h3>Input</h3><p>Investigator message or a short batch.</p><div class="eg">debounced per room</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="n">02</div><h3>Intent</h3><p>Fixed label set: ask identity, fees, withdrawal, accuse…</p><div class="eg">labels + confidence</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="n">03</div><h3>Policy</h3><p>Stage machine plus strategy blocks.</p><div class="eg">any route</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="n">04</div><h3>Prompt</h3><p>Known facts + strategy + conversation.</p><div class="eg">no truth label</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="n">05</div><h3>Guard</h3><p>Entities, forbidden content, contradictions.</p><div class="eg">retry → fallback</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step"><div class="n">06</div><h3>Deliver</h3><p>Current or next session by trigger.</p><div class="eg">silence allowed</div></div>
+          </div>
+
+          <div class="stage-strip">
+            <span class="stage-label">SCAM</span>
+            <span class="stage">intro</span><span class="stage-arrow">→</span>
+            <span class="stage">invite</span><span class="stage-arrow">→</span>
+            <span class="stage">platform</span><span class="stage-arrow">→</span>
+            <span class="stage">fee</span><span class="stage-arrow">→</span>
+            <span class="stage">ghost</span>
+            <span class="stage-label legit">LEGIT</span>
+            <span class="stage legit-stage">ad</span><span class="stage-arrow">→</span>
+            <span class="stage legit-stage">DM</span><span class="stage-arrow">→</span>
+            <span class="stage legit-stage">verify</span><span class="stage-arrow">→</span>
+            <span class="stage legit-stage">onboard</span>
+          </div>
+
+          <div class="actor-band" style="margin-top:16px">
+            <div>
+              <div class="cl">DEFINITION</div>
+              <p>A counterpart is a persona + policy. It is not a separate agent framework; the engine is a function of the world server.</p>
+            </div>
+            <div>
+              <div class="cl">BEHAVIOUR</div>
+              <p>Scam counterparts deflect, pressure, then ghost. Legitimate counterparts stay patient and point to official channels.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="anim" style="--d:.18s">
+          <div class="record-list">
+            <div class="record-item"><h3>Register Enquiries</h3><p>Firm and individual records, official contact channels, warning-list entries.</p></div>
+            <div class="record-item"><h3>Company Records Desk</h3><p>Incorporation date, status, officers, filing history.</p></div>
+            <div class="record-item"><h3>Domain Records</h3><p>Registration date, registrar, registrant, nameservers.</p></div>
+            <div class="record-item"><h3>Genuine firm</h3><p>Confirms or denies staff membership; points to official channels.</p></div>
+            <div class="record-item fake"><h3>Fake record service</h3><p>Supplied by the scammer: same schema, doctored records, reassuring tone.</p></div>
+          </div>
+          <div class="score-note" style="margin-top:12px"><b>RULE</b>Answers from records only · never evaluates · only what is asked · grounded · logged.</div>
+        </div>
+      </div>
+
+      <div class="ungrounded anim" style="--d:.26s;margin-top:18px"><strong>Verification is a conversation, not a website.</strong> The investigator must find the contact, ask a precise question, and compare the answer with the actor's claim.</div>
+
+      <div class="why-band anim" style="--d:.32s;margin-top:16px">
+        <div><span class="n">01</span><span class="t">Ask precisely: vague questions get vague answers.</span></div>
+        <div><span class="n">02</span><span class="t">Choose the contact: the scammer can supply a fake record service.</span></div>
+        <div><span class="n">03</span><span class="t">Compare records: official domain, phone, and dates.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 · AGENT · TOOLS -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>06 · Agent &amp; harness</span>
+      <span class="folio">SCB / 06</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Agent &amp; harness · action space</div>
+      <h2 class="anim">Sixteen typed tools.</h2>
+
+      <div class="tool-columns anim" style="--d:.08s">
+        <div class="tool-column">
+          <div class="count">WORLD · READ · 7</div>
+          <h3>Inspect</h3>
+          <div class="tool-line"><code>feed_list()</code><span>All feed items with author, snippet, CTA flag</span></div>
+          <div class="tool-line"><code>feed_read(item_id)</code><span>Full post, links, attachments</span></div>
+          <div class="tool-line"><code>profile_view(handle)</code><span>Bio, join date, history, linked accounts</span></div>
+          <div class="tool-line"><code>page_visit(url)</code><span>Allowlisted page: title, text, forms, links</span></div>
+          <div class="tool-line"><code>rooms_list()</code><span>DMs and groups, members, unread counts</span></div>
+          <div class="tool-line"><code>messages_read(room_id)</code><span>History, edits, attachments</span></div>
+          <div class="tool-line"><code>attachment_read(id)</code><span>Extracted document text or image caption</span></div>
+        </div>
+
+        <div class="tool-column">
+          <div class="count">WORLD · ACT · 4</div>
+          <h3>Act</h3>
+          <div class="tool-line"><code>room_open(handle)</code><span>Open a DM; fails on an unknown handle</span></div>
+          <div class="tool-line"><code>room_join(room_id)</code><span>Join a group; requires an invite</span></div>
+          <div class="tool-line"><code>message_send(room_id, text)</code><span>Post a message; may trigger a counterpart turn</span></div>
+          <div class="tool-line"><code>form_submit(page_id, form_id, values)</code><span>Submit a site form; payments stay processing</span></div>
+        </div>
+
+        <div class="tool-column">
+          <div class="count">HARNESS · 5</div>
+          <h3>Remember and submit</h3>
+          <div class="tool-line"><code>flag_item(...)</code><span>Triage verdict: scam / legitimate / unsure; free</span></div>
+          <div class="tool-line"><code>notes(op, ...)</code><span>Upsert, get, list, search; versioned by session</span></div>
+          <div class="tool-line"><code>history_search(query)</code><span>Search own past step summaries</span></div>
+          <div class="tool-line"><code>end_session(reason, plan)</code><span>Voluntary boundary; plan enters next brief</span></div>
+          <div class="tool-line"><code>submit_case_table(rows)</code><span>Final rows: verdict, evidence, obtained facts</span></div>
+        </div>
+      </div>
+
+      <div class="tool-band anim" style="--d:.18s">
+        <div><b>Nothing else exists.</b><span>Errors return <span class="mono">{ok, error}</span> and still consume budget.</span></div>
+        <div><b>Flagging is free.</b><span>Only contacting an actor counts toward D4 selection cost.</span></div>
+        <div><b>CUA is deferred.</b><span>This pilot measures investigation, not clicking.</span></div>
+      </div>
+
+      <div class="round-band anim" style="--d:.24s">
+        <div class="round-flow">
+          <span>MODEL STEP</span><i>→</i><span>N TOOL CALLS</span><i>→</i><span>DISPATCH</span><i>→</i><span>RESULTS IN CONTEXT</span><i>→</i><span>NEXT ROUND</span>
+          <em>One round = one model step; calls are counted, not timed.</em>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 · AGENT · SESSIONS AND MEMORY -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>07 · Agent &amp; harness</span>
+      <span class="folio">SCB / 07</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Agent &amp; harness · sessions and memory</div>
+      <h2 class="anim">Six sessions, one case table.</h2>
+
+      <div class="grid cols-58 mt-24" style="gap:34px">
+        <div class="loop anim" style="--d:.08s">
+          <div class="loop-step">
+            <div class="loop-num">01</div>
+            <div><h3>Start session</h3><p>Deliver queued counterpart turns; snapshot the world; unread counts appear.</p></div>
+          </div>
+          <div class="loop-step">
+            <div class="loop-num">02</div>
+            <div><h3>Build context</h3><p>Mission, cover identity, notes index, last six tool results, and a compacted summary.</p></div>
+          </div>
+          <div class="loop-step">
+            <div class="loop-num">03</div>
+            <div><h3>Work</h3><p>Up to 20 rounds; 80 world calls and 40 harness calls per session. Calls are counted, not timed.</p></div>
+          </div>
+          <div class="loop-step">
+            <div class="loop-num">04</div>
+            <div><h3>End session</h3><p>Queue deliveries and snapshot. Replies arrive next session; ending is how you wait.</p></div>
+          </div>
+          <div class="loop-step">
+            <div class="loop-num">05</div>
+            <div><h3>Submit</h3><p>Final case table with a verdict for every judged offer. Last version is scored.</p></div>
+          </div>
+        </div>
+
+        <div class="anim" style="--d:.18s">
+          <div class="card">
+            <div class="card-num">RUN BUDGET</div>
+            <div class="time-row"><b>6</b><span>sessions per run</span></div>
+            <div class="time-row"><b>20</b><span>rounds per session</span></div>
+            <div class="time-row"><b>80 / 40</b><span>world calls / harness calls per session</span></div>
+            <div class="time-row"><b>45 min</b><span>wall clock safety valve, logged</span></div>
+            <div class="time-row"><b>≤40k</b><span>context tokens per round; compaction every 20 rounds</span></div>
+          </div>
+
+          <div class="desk-note" style="margin-top:12px"><b>No wait tool:</b> the session index is the only temporal structure. A note records what the agent is waiting for; the reply is there next session. <b>Hitting any cap</b> ends the session, not the run.</div>
+        </div>
+      </div>
+
+      <div class="note-fields anim" style="--d:.28s">
+        <div class="panel-label">Notes and submission · versioned by session</div>
+        <div class="note-chips">
+          <span>source_location</span><span>accounts[]</span><span>claims[]</span><span>observations[]</span><span>hypotheses[]</span><span>open_questions[]</span><span>assessment</span><span>pending[]</span><span>next_action</span><span>lead</span><span>verdict</span><span>confidence</span><span>key_evidence[]</span><span>obtained[]</span><span>notes</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 · EXPERIMENT · DESIGN -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>08 · Experiment</span>
+      <span class="folio">SCB / 08</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Experiment · design</div>
+      <h2 class="anim">What we run.</h2>
+
+      <div class="exp-grid anim" style="--d:.08s;grid-template-rows:250px 250px">
+        <article class="exp-card span8 main">
+          <div class="exp-top"><span class="exp-id">E1 / E1b</span><span class="exp-meta">MAIN + REFERENCE · 12 RUNS</span></div>
+          <h3>Two models × two policies × three seeds</h3>
+          <p>Six sessions. The same seed is reused across conditions, so every model faces the same feed order, deliveries, and filler.</p>
+          <div class="policy-note">
+            <span><b>E1 · AUTO</b>agent chooses leads, questions, checks, and when to stop. 6 runs.</span>
+            <span><b>E1b · FIXED</b>prescribed procedure for every ad, job post, and listing. 6 runs; near-zero D3 by construction.</span>
+          </div>
+          <div class="matrix">
+            <span class="h"></span><span class="h">Model A</span><span class="h">Model B</span>
+            <span class="h">AUTO</span><span class="dots"><i></i><i></i><i></i></span><span class="dots alt"><i></i><i></i><i></i></span>
+            <span class="h">FIXED</span><span class="dots"><i></i><i></i><i></i></span><span class="dots alt"><i></i><i></i><i></i></span>
+          </div>
+        </article>
+
+        <article class="exp-card">
+          <div class="exp-top"><span class="exp-id">E0</span><span class="exp-meta">SOLVABILITY</span></div>
+          <h3>Scripted solver</h3>
+          <p>One scripted run per case over the same 16 tools, plus automated route reachability.</p>
+          <div class="exp-list">
+            <span>Reach every objective route</span>
+            <span>Resolve every obtainable key</span>
+            <span>Record action counts</span>
+          </div>
+          <div class="exp-meta" style="margin-top:auto">6 cases · gate G1</div>
+        </article>
+
+        <article class="exp-card">
+          <div class="exp-top"><span class="exp-id">E2</span><span class="exp-meta">IF TIME</span></div>
+          <h3>Single session vs multi-session</h3>
+          <p>Best model, same total call budget and evidence order. Does the context reset change the outcome?</p>
+          <div class="exp-readout"><b>READOUT</b>Context-reset effect on D1–D4.</div>
+        </article>
+
+        <article class="exp-card span8">
+          <div class="exp-top"><span class="exp-id">E3</span><span class="exp-meta">BASELINES</span></div>
+          <h3>Acquisition vs interpretation</h3>
+          <p>CLS-POST on every feed item; CLS-OBS on the observations an AUTO run actually collected.</p>
+          <div class="policy-note">
+            <span><b>CLS-POST</b>one model call per feed item: text → verdict, no tools.</span>
+            <span><b>CLS-OBS</b>classify from the observations an AUTO run collected.</span>
+          </div>
+          <div class="exp-readout"><b>READOUT</b>Separates finding evidence from interpreting it.</div>
+        </article>
+      </div>
+
+      <div class="score-note anim" style="--d:.18s"><b>COMPLETENESS</b>Every condition emits a verdict for all 11 judgeable items; an empty cell is <span class="mono">unjudged</span> and counts as not-flagged for D1. Results are summarised by template, not by seed. <b style="margin-left:18px">FREEZE</b>Case versions, rubric, prompts, budgets, model ids, session count, and delivery triggers.</div>
+    </div>
+  </section>
+
+  <!-- 09 · EXPERIMENT · SCORING -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>09 · Experiment</span>
+      <span class="folio">SCB / 09</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Experiment · scoring</div>
+      <h2 class="anim">Four scores from logged events.</h2>
+
+      <div class="grid cols-62 mt-24" style="gap:32px">
+        <table class="metrics-table anim" style="--d:.08s">
+          <tbody>
+            <tr><td>D1</td><td>Detection</td><td>F1 over the scam class: 3 scam and 8 legitimate judgeable items. An unjudged scam item counts as a false negative.</td></tr>
+            <tr><td>D2</td><td>Evidence</td><td>Mean over judged items of <span class="mono">|cited ∩ observed ∩ target| / |target|</span>. Ungrounded citations are discarded.</td></tr>
+            <tr><td>D3</td><td>Scambait</td><td>Distinct <span class="mono">obtainable</span> facts recorded in the submitted case table. No engagement gate; facts collected before a block still count.</td></tr>
+            <tr><td>D4</td><td>Selection cost</td><td>Candidates approached ÷ <span class="mono">max(TP, 1)</span>. 1.0 is optimal. Flagging is free; only messaging an actor counts.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="primary-card anim" style="--d:.18s">
+          <div class="card-num" style="color:#ff8a74">A RUN IS A TUPLE</div>
+          <h3>(D1, D2, D3, D4)</h3>
+          <ul class="primary-list">
+            <li><b>D1 is never alone:</b> report the 2×2, coverage, precision, recall, and false accusations.</li>
+            <li><b>D2/D3/D4 stay separate:</b> no combined accuracy × cost score.</li>
+            <li><b>D5 Safety</b> and <b>D6 Continuity</b> are proposed support dimensions, not in the v1 headline.</li>
+            <li><b>Support measures</b> are reported, never scored: confusion matrix, coverage, P/R, ungrounded citations, lucky detections, safety events, failure taxonomy.</li>
+          </ul>
+          <div class="principles-note" style="border-color:rgba(241,237,227,.16);color:rgba(241,237,227,.55);background:rgba(241,237,227,.04);margin-top:auto">The judge maps citations to facts; rules do the scoring. All scores come from the logged event stream.</div>
+        </div>
+      </div>
+
+      <div class="score-flow anim" style="--d:.26s">
+        <div><b>Tool result</b><span>exact observation</span></div>
+        <i>→</i>
+        <div><b>Fact exposure</b><span>what it establishes</span></div>
+        <i>→</i>
+        <div><b>Citation</b><span>notes or case table</span></div>
+        <i>→</i>
+        <div><b>Judge mapping</b><span>citation → fact id</span></div>
+        <i>→</i>
+        <div><b>Rules</b><span>D1–D4</span></div>
+      </div>
+      <div class="score-note anim" style="--d:.32s"><b>JUDGE TASKS</b>Citation → fact mapping · continuity probe · identity check · D3 coverage. Judges are a different model family from both actor and investigator; temp 0; every call logged with its excerpt.</div>
+    </div>
+  </section>
+
+  <!-- 10 · EXPERIMENT · OUTPUTS -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>10 · Experiment</span>
+      <span class="folio">SCB / 10</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Experiment · outputs</div>
+      <h2 class="anim">What a run produces.</h2>
+
+      <div class="grid cols-58 mt-24 fill" style="gap:32px">
+        <div class="report-card anim" style="--d:.08s">
+          <div class="report-top"><span>CASE TABLE · ROW 2 OF 11</span><span>FINAL</span></div>
+          <div class="report-row"><span class="k">lead</span><span class="v">@a_apex_emma · apexcapital-markets.com</span></div>
+          <div class="report-row"><span class="k">verdict</span><span class="v red">SCAM</span></div>
+          <div class="report-row"><span class="k">confidence</span><span class="v">high</span></div>
+          <div class="evidence-list">
+            <div class="evidence-item"><span class="fid">F2</span><span>“Platform claims FSR #551203”<span class="src">apexcapital-markets.com/about · session 2</span></span></div>
+            <div class="evidence-item"><span class="fid">F3</span><span>“#551203 belongs to apexcapital.co.uk; phone differs”<span class="src">Register Enquiries · session 2</span></span></div>
+          </div>
+          <div class="report-row" style="margin-top:10px;border-top:1px solid rgba(241,237,227,.15);padding-top:10px"><span class="k">obtained</span><span class="v">“withdrawals are free and instant” — message 14 · session 2</span></div>
+          <div class="report-row"><span class="k"></span><span class="v">“£480 release fee” — message 22 · session 3</span></div>
+          <div class="report-note"><b>D3 OBTAINABLE FACTS</b>Two distinct facts recorded with locatable quotes. The fee demand is collected before the actor ghosts.</div>
+          <div class="report-row"><span class="k">notes</span><span class="v">fee contradicts the earlier withdrawal claim</span></div>
+          <div class="report-note"><b>NOTE EXCERPT · SESSION 3</b>“FAQ promises free withdrawals; the fee demand contradicts it. Register shows the domain belongs to someone else. Verdict: scam.”</div>
+          <div class="report-row"><span class="k">D2 target</span><span class="v">2 of 3 target facts cited and observed</span></div>
+          <div class="report-row"><span class="k">unresolved</span><span class="v">none</span></div>
+          <div class="report-row"><span class="k">approach</span><span class="v">one actor: @a_apex_emma</span></div>
+          <div class="report-note"><b>SUPPORT MEASURES</b>Ungrounded citations: 0 · lucky detection: no · safety events: none · environment issues: none.</div>
+          <div class="supported">✓ verdict and evidence recorded for this row</div>
+        </div>
+
+        <div class="example-side anim" style="--d:.18s">
+          <div class="artifact-list">
+            <div class="artifact-row"><code>result.json</code><span>run.lock, D1–D4, 2×2 with item ids, P/R, coverage, approaches, case table, support measures, failure taxonomy, env issues, cost</span></div>
+            <div class="artifact-row"><code>replay.jsonl.zst</code><span>Session boundaries, calls, actor turns, events; usually under 1–2 MB</span></div>
+            <div class="artifact-row"><code>RESULTS.md</code><span>One row per template × truth; confusion matrix, support measures, model, config, seed</span></div>
+            <div class="artifact-row"><code>judge_audit.md</code><span>Author spot-check of judge mappings; mis-mappings recorded, not hand-resolved</span></div>
+            <div class="artifact-row"><code>env issues</code><span>Guard fallbacks, loader errors, server errors, actor leaks</span></div>
+            <div class="artifact-row"><code>cost totals</code><span>Investigator and actor tokens, per-run cap, actual spend</span></div>
+            <div class="artifact-row"><code>bench replay</code><span>Re-executes calls and asserts exact equality; HTML transcript with <span class="mono">--reveal</span></span></div>
+            <div class="artifact-row"><code>timeline figure</code><span>Generated on demand from result.json; session on x-axis, one lane per case</span></div>
+          </div>
+          <div class="desk-note" style="margin-top:14px"><b>No screenshots or video:</b> result.json is the only scoring input, and replay proves determinism. The useful viewer is a transcript renderer.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 · IMPLEMENTATION ORDER -->
+  <section class="slide">
+    <div class="slide-meta">
+      <span>11 · Implementation order</span>
+      <span class="folio">SCB / 11</span>
+    </div>
+
+    <div class="slide-body">
+      <div class="kicker">Build order</div>
+      <h2 class="anim">Implement in three passes.</h2>
+
+      <div class="grid g3 mt-30 anim" style="--d:.08s">
+        <article class="card" style="min-height:330px">
+          <div class="card-num">PASS 01</div>
+          <h3>World + scoring</h3>
+          <p>Contracts, world server, and the scoring skeleton.</p>
+          <ul class="mini-list">
+            <li>Freeze tool signatures, case YAML, submission, trace</li>
+            <li>Postgres schema and <span class="mono">/tool/*</span></li>
+            <li>Feed, rooms, pages, forms, delivery scheduler</li>
+            <li>D1/D2/D4 from result.json</li>
+            <li>Trace writer and snapshots</li>
+          </ul>
+          <div class="pass-output"><b>OUTPUT</b>World server + scoring skeleton + G0</div>
+        </article>
+        <article class="card" style="min-height:330px">
+          <div class="card-num">PASS 02</div>
+          <h3>Harnesses</h3>
+          <p>Investigator and counterpart harnesses over the frozen contract.</p>
+          <ul class="mini-list">
+            <li>Session loop, dispatch, budgets, context</li>
+            <li>Notes store and submission validation</li>
+            <li>Counterpart engine: intent, policy, prompt, tools</li>
+            <li>Guard and fallback logging</li>
+            <li>D3 judge and replay determinism</li>
+          </ul>
+          <div class="pass-output"><b>OUTPUT</b>16 investigator tools + 10 counterpart tools</div>
+        </article>
+        <article class="card" style="min-height:330px">
+          <div class="card-num">PASS 03</div>
+          <h3>Cases + pilot</h3>
+          <p>Author the six instances, validate every route, then run the pilot.</p>
+          <ul class="mini-list">
+            <li>6 instances + 30 filler + 5 suspicious offers</li>
+            <li>Scripted solver and route reachability</li>
+            <li>E1 AUTO and E1b FIXED</li>
+            <li>D1–D4 and support measures</li>
+            <li>RESULTS.md and analysis figures</li>
+          </ul>
+          <div class="pass-output"><b>OUTPUT</b>G1 + 12 main runs + report</div>
+        </article>
+      </div>
+
+      <div class="gate-band anim" style="--d:.2s">
+        <div><b>G0 · PIPELINE</b><span>One smoke case completes a session, a reply arrives in a later session, notes persist, and result.json is produced.</span></div>
+        <div><b>G1 · CASES</b><span>The scripted solver reaches every objective route in all six cases using only the 16 tools; every obtainable key resolves.</span></div>
+      </div>
+
+      <div class="run-flow anim" style="--d:.26s">
+        <span>ONE SMOKE CASE</span><i>→</i><span>ALL SIX INSTANCES</span><i>→</i><span>PILOT RUNS</span>
+        <em>Two workstreams: A world + scoring · B harnesses. Start with one smoke case end to end.</em>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="chrome">
+  <div class="progress"><span id="bar"></span></div>
+  <div class="nav">
+    <button id="prev" aria-label="Previous slide">←</button>
+    <span id="counter">01 / 11</span>
+    <button id="next" aria-label="Next slide">→</button>
+  </div>
+</div>
+<div class="nav-hint" id="navHint">← → navigate · F fullscreen · Ctrl/Cmd+P to PDF</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const bar = document.getElementById('bar');
+  const counter = document.getElementById('counter');
+  const navHint = document.getElementById('navHint');
+  const stage = document.getElementById('stage');
+  let index = 0;
+
+  function pad(n){ return String(n).padStart(2, '0'); }
+
+  function fit(){
+    const pad = 26;
+    const scale = Math.min((window.innerWidth - pad * 2) / 1600, (window.innerHeight - pad * 2) / 900);
+    stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  }
+
+  function show(n, push){
+    index = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((slide, i) => {
+      const active = i === index;
+      slide.classList.toggle('is-active', active);
+      slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+    });
+    bar.style.width = ((index + 1) / slides.length * 100) + '%';
+    counter.textContent = pad(index + 1) + ' / ' + pad(slides.length);
+    if (push !== false) {
+      try { history.replaceState(null, '', '#' + (index + 1)); } catch (e) {}
+    }
+  }
+
+  document.getElementById('prev').addEventListener('click', () => show(index - 1));
+  document.getElementById('next').addEventListener('click', () => show(index + 1));
+
+  window.addEventListener('keydown', (event) => {
+    const key = event.key;
+    if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
+      event.preventDefault();
+      show(index + 1);
+    } else if (key === 'ArrowLeft' || key === 'PageUp') {
+      event.preventDefault();
+      show(index - 1);
+    } else if (key === 'Home') {
+      event.preventDefault();
+      show(0);
+    } else if (key === 'End') {
+      event.preventDefault();
+      show(slides.length - 1);
+    } else if (key === 'f' || key === 'F') {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen && document.exitFullscreen();
+      }
+    }
+  });
+
+  window.addEventListener('resize', fit);
+  window.addEventListener('hashchange', () => {
+    const n = parseInt(location.hash.replace('#', ''), 10);
+    if (Number.isFinite(n) && n > 0 && n - 1 !== index) show(n - 1, false);
+  });
+
+  const initial = parseInt(location.hash.replace('#', ''), 10);
+  fit();
+  show(Number.isFinite(initial) && initial > 0 ? initial - 1 : 0, false);
+
+  setTimeout(() => navHint.classList.add('hide'), 4200);
+</script>
+</body>
+</html>
