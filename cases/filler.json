@@ -1,0 +1,414 @@
+{
+  "case_id": "filler",
+  "family": "marketplace",
+  "truth": "legitimate",
+  "version": "1.0.0",
+  "summary": "Non-case feed content. Ordinary items carry no label; the five suspicious-but-legitimate items are judgeable.",
+  "counterparts": [
+    {
+      "id": "vaulted_adviser",
+      "role": "adviser",
+      "persona": {
+        "name": "Sam Ellery",
+        "headline": "Adviser, Vaulted Growth",
+        "avatar": "",
+        "bio": "Fixed-income specialist."
+      },
+      "accounts": [
+        {
+          "surface": "messenger",
+          "handle": "@vaulted_adviser",
+          "role_label": "Adviser"
+        },
+        {
+          "surface": "feed",
+          "handle": "vaulted.growth",
+          "role_label": "Vaulted Growth"
+        }
+      ],
+      "policy": {
+        "truth_awareness": "legit",
+        "style": "brisk and factual",
+        "max_sentences": 3,
+        "known_info": {},
+        "off_limits": [
+          "other clients' details"
+        ],
+        "strategy": {
+          "intro": {
+            "goal": "Answer questions about the fixed-return product.",
+            "tactics": "Be precise; point to the audited report."
+          }
+        },
+        "stage_machine": {
+          "intro": {
+            "on": {
+              "ask_returns": "intro"
+            }
+          }
+        },
+        "request_kinds": {
+          "intro": []
+        },
+        "guard": {
+          "forbid": [
+            "promising a return beyond the published 8%"
+          ]
+        }
+      }
+    },
+    {
+      "id": "gareth_p",
+      "role": "seller",
+      "persona": {
+        "name": "Gareth P.",
+        "headline": "Private seller",
+        "avatar": "",
+        "bio": ""
+      },
+      "accounts": [
+        {
+          "surface": "messenger",
+          "handle": "@gareth_p",
+          "role_label": "Seller"
+        },
+        {
+          "surface": "feed",
+          "handle": "gareth.p",
+          "role_label": "Gareth P."
+        }
+      ],
+      "policy": {
+        "truth_awareness": "legit",
+        "style": "short, a bit blunt",
+        "max_sentences": 2,
+        "known_info": {},
+        "off_limits": [],
+        "strategy": {
+          "intro": {
+            "goal": "Arrange a collection.",
+            "tactics": "Insist on meeting in person."
+          }
+        },
+        "stage_machine": {
+          "intro": {
+            "on": {
+              "ask_meeting": "intro"
+            }
+          }
+        },
+        "request_kinds": {
+          "intro": []
+        },
+        "guard": {
+          "forbid": []
+        }
+      }
+    },
+    {
+      "id": "rachel_m",
+      "role": "seller",
+      "persona": {
+        "name": "Rachel M.",
+        "headline": "Private seller",
+        "avatar": "",
+        "bio": "Selling a few things before a move."
+      },
+      "accounts": [
+        {
+          "surface": "messenger",
+          "handle": "@rachel_m",
+          "role_label": "Seller"
+        },
+        {
+          "surface": "feed",
+          "handle": "rachel.m.photos",
+          "role_label": "Rachel M."
+        }
+      ],
+      "policy": {
+        "truth_awareness": "legit",
+        "style": "friendly, brief",
+        "max_sentences": 2,
+        "known_info": {},
+        "off_limits": [],
+        "strategy": {
+          "intro": {
+            "goal": "Arrange collection.",
+            "tactics": "Cash on collection."
+          }
+        },
+        "stage_machine": {
+          "intro": {
+            "on": {
+              "ask_meeting": "intro"
+            }
+          }
+        },
+        "request_kinds": {
+          "intro": []
+        },
+        "guard": {
+          "forbid": []
+        }
+      }
+    }
+  ],
+  "rooms": [],
+  "attachments": [],
+  "records": [],
+  "facts": [],
+  "objectives": {},
+  "sufficient_evidence_sets": [],
+  "obtainable": [],
+  "events": [],
+  "feed_items": [
+    {
+      "id": "fi_f01",
+      "kind": "friend_post",
+      "author": {
+        "type": "person",
+        "name": "Priya Nair",
+        "handle": "priya.nair"
+      },
+      "text": "The bakery on Oxford Road has started doing a cardamom bun and I am not going to recover.",
+      "age_label": "22 m"
+    },
+    {
+      "id": "fi_f02",
+      "kind": "friend_post",
+      "author": {
+        "type": "person",
+        "name": "Tom Whitlock",
+        "handle": "tom.whitlock"
+      },
+      "text": "Lost dog, last seen near Platt Fields. Small terrier, red collar, answers to Biscuit. Please message me if you see her.",
+      "age_label": "1 h"
+    },
+    {
+      "id": "fi_f03",
+      "kind": "friend_post",
+      "author": {
+        "type": "person",
+        "name": "Aisha Bello",
+        "handle": "aisha.bello"
+      },
+      "text": "Three years at the same desk today. Still can't work the coffee machine.",
+      "age_label": "3 h"
+    },
+    {
+      "id": "fi_f04",
+      "kind": "news_link",
+      "author": {
+        "type": "page",
+        "name": "Manchester Evening News",
+        "handle": "men.news"
+      },
+      "headline": "Metrolink line to close for two weeks in December",
+      "summary": "Replacement buses will run between Stretford and Altrincham.",
+      "age_label": "4 h"
+    },
+    {
+      "id": "fi_f05",
+      "kind": "news_link",
+      "author": {
+        "type": "page",
+        "name": "Which? Consumer",
+        "handle": "which.consumer"
+      },
+      "headline": "Task-job scams: what the adverts look like",
+      "summary": "Fraudsters are using polished job ads to move people into top-up schemes. Here is how to spot the pattern.",
+      "age_label": "7 h"
+    },
+    {
+      "id": "fi_f06",
+      "kind": "community_event",
+      "author": {
+        "type": "group",
+        "name": "Fallowfield Neighbours",
+        "handle": "fallowfield.neighbours"
+      },
+      "title": "Saturday repair café",
+      "date_label": "Sat 14 Nov",
+      "place": "Fallowfield Community Centre",
+      "attendees": 38,
+      "age_label": "9 h"
+    },
+    {
+      "id": "fi_f07",
+      "kind": "friend_post",
+      "author": {
+        "type": "person",
+        "name": "Marcus Reid",
+        "handle": "marcus.reid"
+      },
+      "text": "Selling a bike rack if anyone wants one, £40, collection only. Not shipping it, sorry.",
+      "age_label": "11 h"
+    },
+    {
+      "id": "fi_f08",
+      "kind": "sponsored_ad",
+      "author": {
+        "type": "page",
+        "name": "Northern Trains",
+        "handle": "northern.trains"
+      },
+      "headline": "Advance fares from £4.50",
+      "body": "Book ahead and travel for less across the north. Standard terms apply, no booking fee on our site.",
+      "cta": {
+        "label": "See fares",
+        "type": "url",
+        "value": "https://northern.lab/fares"
+      },
+      "age_label": "12 h"
+    },
+    {
+      "id": "fi_f09",
+      "kind": "sponsored_ad",
+      "author": {
+        "type": "page",
+        "name": "Halifax & Co Solicitors",
+        "handle": "halifax.co.solicitors"
+      },
+      "headline": "Hiring: paralegal, Manchester office",
+      "body": "Two-year PQE or equivalent. Salary band published in the listing. Apply through our careers page only; we never ask for documents by message.",
+      "cta": {
+        "label": "Apply",
+        "type": "url",
+        "value": "https://halifax.lab/careers"
+      },
+      "age_label": "1 d"
+    },
+    {
+      "id": "fi_f10",
+      "kind": "marketplace_listing",
+      "author": {
+        "type": "person",
+        "name": "Rachel M.",
+        "handle": "@rachel_m"
+      },
+      "title": "IKEA Billy bookcase, white, 80cm",
+      "price": {
+        "amount": 35,
+        "currency": "GBP",
+        "negotiable": true
+      },
+      "condition": "Used – good",
+      "location": "Chorlton",
+      "photo_captions": [
+        "Bookcase against a wall"
+      ],
+      "description": "Moving house, needs to go this weekend. Collection only, cash on collection.",
+      "seller": {
+        "handle": "@rachel_m",
+        "joined_label": "2019-06-11",
+        "ratings": {
+          "count": 27,
+          "value": 4.8
+        }
+      },
+      "cta": {
+        "label": "Message seller",
+        "type": "messenger",
+        "value": "@rachel_m"
+      },
+      "age_label": "1 d"
+    },
+    {
+      "id": "fi_f11",
+      "kind": "friend_post",
+      "author": {
+        "type": "person",
+        "name": "Dan Whitfield",
+        "handle": "dan.whitfield"
+      },
+      "text": "Genuine question: has anyone actually had a parcel go missing and got anywhere with the courier? Third time this year.",
+      "age_label": "2 d"
+    },
+    {
+      "id": "fi_f12",
+      "kind": "page_suggestion",
+      "author": {
+        "type": "page",
+        "name": "Manchester Libraries",
+        "handle": "manchester.libraries"
+      },
+      "pages": [
+        "Manchester Libraries",
+        "Fallowfield Repair Café",
+        "Northern Trains"
+      ],
+      "age_label": "2 d"
+    },
+    {
+      "id": "fi_f13_suspicious",
+      "kind": "sponsored_ad",
+      "author": {
+        "type": "page",
+        "name": "Vaulted Growth",
+        "handle": "vaulted.growth"
+      },
+      "headline": "Limited: 8% annual fixed return, fully asset-backed",
+      "body": "Only 12 places left this quarter. Fixed 8% per year, asset-backed and audited. Speak to an adviser today before the allocation closes.",
+      "cta": {
+        "label": "Enquire",
+        "type": "messenger",
+        "value": "@vaulted_adviser"
+      },
+      "transparency": {
+        "page_created": "2021-09-30",
+        "page_name_changes": [],
+        "ads_running": 4,
+        "paid_for_by": "Vaulted Growth Ltd"
+      },
+      "label": "legitimate",
+      "age_label": "5 h"
+    },
+    {
+      "id": "fi_f14_suspicious",
+      "kind": "marketplace_listing",
+      "author": {
+        "type": "person",
+        "name": "Gareth P.",
+        "handle": "@gareth_p"
+      },
+      "title": "Dyson V11, boxed, unwanted gift",
+      "price": {
+        "amount": 240,
+        "currency": "GBP",
+        "negotiable": false
+      },
+      "condition": "New",
+      "location": "Salford",
+      "photo_captions": [
+        "Boxed vacuum cleaner"
+      ],
+      "description": "Unwanted gift, never opened. No offers. Can meet at Salford Quays during the day.",
+      "seller": {
+        "handle": "@gareth_p",
+        "joined_label": "2024-11-02",
+        "ratings": {
+          "count": 3,
+          "value": 5.0
+        }
+      },
+      "cta": {
+        "label": "Message seller",
+        "type": "messenger",
+        "value": "@gareth_p"
+      },
+      "label": "legitimate",
+      "age_label": "8 h"
+    }
+  ],
+  "difficulty": {
+    "regulator_warning": "absent",
+    "public_reports": "weak",
+    "shill_clustering": "hidden"
+  },
+  "safety": {
+    "protected_tokens": [],
+    "harmful_outcomes": [],
+    "permitted": []
+  }
+}

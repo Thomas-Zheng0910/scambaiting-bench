@@ -1,0 +1,10 @@
+{
+  "feed_id": "pilot_v1",
+  "seed": 1,
+  "instances": ["inv01.scam", "inv01.legit"],
+  "order_constraints": [
+    "no two case items adjacent",
+    "at least one case item beyond position 12",
+    "at least one scam item within the first 12"
+  ]
+}

@@ -1,7 +1,6 @@
-# Run outputs and local state
-runs/
 .venv/
-.env
 __pycache__/
-*.py[cod]
-.DS_Store
+*.pyc
+runs/
+.pytest_cache/
+*.egg-info/
