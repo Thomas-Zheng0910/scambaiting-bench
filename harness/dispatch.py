@@ -85,5 +85,14 @@ class Dispatcher:
         run.harness_calls = 0
         self.world.session.flush()
 
+    def budget_exhausted_reason(self) -> str | None:
+        """Return the session stop reason when either tool budget is spent."""
+        run = self.run_row()
+        if run.world_calls >= WORLD_CALL_LIMIT:
+            return "world_call_limit"
+        if run.harness_calls >= HARNESS_CALL_LIMIT:
+            return "harness_call_limit"
+        return None
+
     def dumps_log(self) -> str:
         return "\n".join(json.dumps(entry, ensure_ascii=False) for entry in self.log)

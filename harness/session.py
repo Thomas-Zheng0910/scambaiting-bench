@@ -55,7 +55,12 @@ def run_session(
 
     rounds = 0
     calls = 0
+    stop_reason: str | None = None
     while rounds < max_rounds:
+        stop_reason = tools.end_reason or dispatcher.budget_exhausted_reason()
+        if stop_reason:
+            break
+
         run.round = rounds
         world.round_no = rounds
         world.call_index = 0
@@ -82,12 +87,17 @@ def run_session(
                         "content": truncate(call.name, result.to_json()),
                     }
                 )
+                stop_reason = tools.end_reason or dispatcher.budget_exhausted_reason()
+                if stop_reason:
+                    # Later calls in this batch must have no effects. This
+                    # context is discarded when the next session starts.
+                    break
+
+        if stop_reason:
+            break
         messages = trim_history(messages)
 
-        if tools.ended:
-            break
-
-    reason = tools.end_reason or ("round_limit" if rounds >= max_rounds else "agent_ended")
+    reason = stop_reason or ("round_limit" if rounds >= max_rounds else "agent_ended")
     world.end_session(reason)
     trace.session_end(session_no, reason)
     return SessionOutcome(session_no, rounds, reason, calls)
