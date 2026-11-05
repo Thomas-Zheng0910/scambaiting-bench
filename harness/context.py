@@ -91,8 +91,20 @@ def truncate(tool_name: str, content: Any) -> str:
 
 
 def trim_history(messages: list[dict[str, Any]], keep: int = 24) -> list[dict[str, Any]]:
-    """Keep the system prompt, the session brief, and the last N messages."""
+    """Keep the prompt, brief, and a recent suffix of complete tool rounds.
+
+    ``keep`` is a soft message limit: if the boundary falls inside a tool
+    round, retain its assistant message and every tool result together.
+    The input history is expected to contain complete tool rounds.
+    """
+    if keep < 1:
+        raise ValueError("keep must be positive")
     if len(messages) <= keep + 2:
         return messages
-    head, tail = messages[:2], messages[-keep:]
-    return head + [{"role": "system", "content": "(earlier turns omitted)"}] + tail
+
+    start = len(messages) - keep
+    while start > 2 and messages[start]["role"] == "tool":
+        start -= 1
+    if start == 2:
+        return messages
+    return messages[:2] + [{"role": "system", "content": "(earlier turns omitted)"}] + messages[start:]
